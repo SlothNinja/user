@@ -15,6 +15,7 @@ import (
 	"cloud.google.com/go/datastore"
 	"github.com/SlothNinja/log"
 	"github.com/SlothNinja/restful"
+	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	"google.golang.org/appengine"
@@ -41,6 +42,7 @@ type Data struct {
 	Joined             time.Time `json:"joined"`
 	CreatedAt          time.Time `json:"createdat"`
 	UpdatedAt          time.Time `json:"updatedat"`
+	Loaded             bool      `json:"loaded" datastore:"-"`
 }
 
 const (
@@ -409,6 +411,38 @@ func PathFor(uid int64) template.HTML {
 // 	}
 // 	WithCurrent(c, u)
 // }
+
+func GetCUserHandler(c *gin.Context) {
+	log.Debugf("Entering")
+	defer log.Debugf("Exiting")
+
+	session := sessions.Default(c)
+	token, ok := SessionTokenFrom(session)
+	if !ok {
+		log.Warningf("missing token")
+		return
+	}
+
+	if token.Loaded {
+		WithCurrent(c, token.User)
+		return
+	}
+
+	dsClient, err := datastore.NewClient(c, "")
+	if err != nil {
+		log.Warningf("Client error: %v", err)
+		return
+	}
+
+	u := New(c, token.ID())
+	err = dsClient.Get(c, u.Key, &u)
+	if err != nil {
+		log.Warningf("ByID err: %s", err)
+		return
+	}
+	log.Debugf("u: %#v", u)
+	WithCurrent(c, u)
+}
 
 // Use after GetGUserHandler and GetUserHandler handlers
 // func RequireLogin() gin.HandlerFunc {
