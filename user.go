@@ -14,10 +14,8 @@ import (
 
 	"cloud.google.com/go/datastore"
 	"github.com/SlothNinja/log"
-	"github.com/SlothNinja/restful"
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
-	"github.com/gin-gonic/gin/binding"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/user"
 )
@@ -326,24 +324,37 @@ func GravatarURL(email string, options ...string) string {
 }
 
 func (u *User) Update(c *gin.Context) error {
-	n := New(c, 0)
-	if err := restful.BindWith(c, n, binding.FormPost); err != nil {
+	obj := struct {
+		Name               string `form:"name"`
+		Email              string `form:"email"`
+		EmailNotifications bool   `form:"emailNotifications"`
+	}{}
+
+	err := c.ShouldBind(&obj)
+	if err != nil {
 		return err
 	}
 
-	log.Debugf("n: %#v", n)
+	log.Debugf("obj: %#v", obj)
+
+	//n := New(c, 0)
+	// 	if err := restful.BindWith(c, n, binding.FormPost); err != nil {
+	// 		return err
+	// 	}
+
+	// log.Debugf("n: %#v", n)
 
 	if IsAdmin(c) {
-		if n.Email != "" {
-			u.Email = n.Email
+		if obj.Email != "" {
+			u.Email = obj.Email
 		}
 	}
 
 	if u.IsAdminOrCurrent(c) {
-		if err := u.updateName(c, n.Name); err != nil {
+		if err := u.updateName(c, obj.Name); err != nil {
 			return err
 		}
-		u.EmailNotifications = n.EmailNotifications
+		u.EmailNotifications = obj.EmailNotifications
 	}
 
 	return nil
