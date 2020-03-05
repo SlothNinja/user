@@ -45,6 +45,24 @@ type Data struct {
 	Loaded             bool      `json:"loaded" datastore:"-"`
 }
 
+func (u *User) Load(ps []datastore.Property) error {
+	return datastore.LoadStruct(u, ps)
+}
+
+func (u *User) Save() ([]datastore.Property, error) {
+	t := time.Now()
+	if u.CreatedAt.IsZero() {
+		u.CreatedAt = t
+	}
+	u.UpdatedAt = t
+	return datastore.SaveStruct(u)
+}
+
+func (u *User) LoadKey(k *datastore.Key) error {
+	u.Key = k
+	return nil
+}
+
 const (
 	kind             = "User"
 	uidParam         = "uid"
@@ -424,7 +442,9 @@ func GetCUserHandler(c *gin.Context) {
 	}
 
 	if token.Loaded {
-		WithCurrent(c, token.User)
+		u := New(c, token.ID())
+		u.Data = token.User.Data
+		WithCurrent(c, u)
 		return
 	}
 
@@ -435,9 +455,9 @@ func GetCUserHandler(c *gin.Context) {
 	}
 
 	u := New(c, token.ID())
-	err = dsClient.Get(c, u.Key, &u)
+	err = dsClient.Get(c, u.Key, u)
 	if err != nil {
-		log.Warningf("ByID err: %s", err)
+		log.Warningf(err.Error())
 		return
 	}
 	log.Debugf("u: %#v", u)

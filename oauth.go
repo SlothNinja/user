@@ -133,7 +133,26 @@ func GenOAuthID(s string) string {
 type OAuth struct {
 	Key       *datastore.Key `datastore:"__key__"`
 	ID        int64
+	CreatedAt time.Time
 	UpdatedAt time.Time
+}
+
+func (o *OAuth) Load(ps []datastore.Property) error {
+	return datastore.LoadStruct(o, ps)
+}
+
+func (o *OAuth) Save() ([]datastore.Property, error) {
+	t := time.Now()
+	if o.CreatedAt.IsZero() {
+		o.CreatedAt = t
+	}
+	o.UpdatedAt = t
+	return datastore.SaveStruct(o)
+}
+
+func (o *OAuth) LoadKey(k *datastore.Key) error {
+	o.Key = k
+	return nil
 }
 
 func pk() *datastore.Key {
@@ -417,8 +436,9 @@ func getByID(c *gin.Context, id int64) (*User, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	u := New(c, id)
-	err = dsClient.Get(c, u.Key, &u)
+	err = dsClient.Get(c, u.Key, u)
 	return u, err
 }
 
