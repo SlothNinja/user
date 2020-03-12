@@ -40,7 +40,6 @@ type Data struct {
 	Joined             time.Time `json:"joined"`
 	CreatedAt          time.Time `json:"createdat"`
 	UpdatedAt          time.Time `json:"updatedat"`
-	Loaded             bool      `json:"loaded" datastore:"-"`
 }
 
 func (u *User) Load(ps []datastore.Property) error {
@@ -370,30 +369,35 @@ func (u *User) updateName(c *gin.Context, n string) error {
 		return fmt.Errorf("%q is too long.", n)
 	case !matcher.MatchString(n):
 		return fmt.Errorf("%q is not a valid user name.", n)
-	case !NameIsUnique(c, n):
-		return fmt.Errorf("%q is not a unique user name.", n)
+	default:
+		uniq, err := NameIsUnique(c, n)
+		if err != nil {
+			return err
+		}
+		if !uniq {
+			return fmt.Errorf("%q is not a unique user name.", n)
+		}
+		u.Name = n
+		u.LCName = strings.ToLower(n)
+		return nil
 	}
-
-	u.Name = n
-	u.LCName = strings.ToLower(n)
-	return nil
 }
 
-func NameIsUnique(c *gin.Context, name string) bool {
+func NameIsUnique(c *gin.Context, name string) (bool, error) {
 	LCName := strings.ToLower(name)
 
 	dsClient, err := datastore.NewClient(c, "")
 	if err != nil {
-		return false
+		return false, err
 	}
 
 	q := datastore.NewQuery("User").Filter("LCName=", LCName)
 
-	if cnt, err := dsClient.Count(c, q); err != nil {
-		return false
-	} else {
-		return cnt == 0
+	cnt, err := dsClient.Count(c, q)
+	if err != nil {
+		return false, err
 	}
+	return cnt == 0, nil
 }
 
 func (u *User) Equal(u2 *User) bool {

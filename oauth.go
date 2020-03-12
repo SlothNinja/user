@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"cloud.google.com/go/datastore"
@@ -224,8 +225,8 @@ func Auth(path string) gin.HandlerFunc {
 				return
 			}
 
-			u.Loaded = true
-			saveToSessionAndReturnTo(c, u, homePath)
+			st := NewSessionToken(u, uInfo.Sub, true)
+			saveToSessionAndReturnTo(c, st, homePath)
 			return
 		}
 
@@ -259,20 +260,22 @@ func Auth(path string) gin.HandlerFunc {
 
 			oa := NewOAuth(oaid)
 			oa.ID = u.ID()
-			oa.UpdatedAt = time.Now()
 			_, err = dsClient.Put(c, oa.Key, &oa)
 			if err != nil {
 				log.Errorf(err.Error())
 				c.AbortWithStatus(http.StatusBadRequest)
 				return
 			}
-			saveToSessionAndReturnTo(c, u, homePath)
+			st := NewSessionToken(u, uInfo.Sub, true)
+			saveToSessionAndReturnTo(c, st, homePath)
 			return
 		}
 
 		u = New(c, 0)
+		u.Name = strings.Split(uInfo.Email, "@")[0]
 		u.Email = uInfo.Email
-		saveToSessionAndReturnTo(c, u, userNewPath)
+		st := NewSessionToken(u, uInfo.Sub, false)
+		saveToSessionAndReturnTo(c, st, userNewPath)
 		return
 
 		// l := len(ks)
@@ -391,9 +394,9 @@ func getOAuth(c *gin.Context, id string) (OAuth, error) {
 	return u, err
 }
 
-func saveToSessionAndReturnTo(c *gin.Context, u *User, path string) {
+func saveToSessionAndReturnTo(c *gin.Context, st sessionToken, path string) {
 	session := sessions.Default(c)
-	err := u.SaveTo(session)
+	err := st.SaveTo(session)
 	if err != nil {
 		log.Errorf(err.Error())
 		c.AbortWithStatus(http.StatusBadRequest)
@@ -442,13 +445,23 @@ func getByID(c *gin.Context, id int64) (*User, error) {
 	return u, err
 }
 
-func (u *User) SaveTo(s sessions.Session) error {
-	s.Set(sessionKey, sessionToken{u})
-	return s.Save()
+type sessionToken struct {
+	Sub    string
+	Loaded bool
+	*User
 }
 
-type sessionToken struct {
-	*User
+func NewSessionToken(u *User, sub string, loaded bool) sessionToken {
+	return sessionToken{
+		Sub:    sub,
+		Loaded: loaded,
+		User:   u,
+	}
+}
+
+func (st sessionToken) SaveTo(s sessions.Session) error {
+	s.Set(sessionKey, st)
+	return s.Save()
 }
 
 func SessionTokenFrom(s sessions.Session) (sessionToken, bool) {
