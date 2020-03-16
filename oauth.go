@@ -93,8 +93,8 @@ func oauth2Config(c *gin.Context, path string, scopes ...string) *oauth2.Config 
 	// }
 
 	return &oauth2.Config{
-		ClientID:     "435340145701-t5o50sjq7hsbilopgreobhvrv30e1tj4.apps.googleusercontent.com",
-		ClientSecret: "Fe5f-Ht1V5_GohDEOS_TQOVc",
+		ClientID:     os.Getenv("CLIENT_ID"),
+		ClientSecret: os.Getenv("CLIENT_SECRET"),
 		Endpoint:     google.Endpoint,
 		Scopes:       scopes,
 		RedirectURL:  fmt.Sprintf("%s%s", getHost(), path),
