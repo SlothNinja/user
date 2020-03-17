@@ -172,6 +172,10 @@ func ByEmail(c *gin.Context, email string) (OAuth, error) {
 	log.Debugf("Entering")
 	defer log.Debugf("Exiting")
 
+	log.Debugf("email: %s", email)
+	email = strings.ToLower(strings.TrimSpace(email))
+	log.Debugf("email: %s", email)
+
 	dsClient, err := datastore.NewClient(c, "")
 	if err != nil {
 		return OAuth{}, err
