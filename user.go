@@ -21,9 +21,9 @@ import (
 )
 
 type User struct {
-	c       *gin.Context
-	isAdmin bool
-	Key     *datastore.Key `datastore:"__key__"`
+	c *gin.Context
+	// isAdmin bool
+	Key *datastore.Key `datastore:"__key__"`
 	// ID      int64          `gae:"$id"`
 	// Parent  *datastore.Key `gae:"$parent"`
 	Data
@@ -37,6 +37,7 @@ type Data struct {
 	XMPPNotifications  bool      `json:"xmppnotifications"`
 	EmailNotifications bool      `json:"emailnotifications" form:"emailNotifications"`
 	EmailReminders     bool      `json:"emailreminders"`
+	Admin              bool      `json:"admin"`
 	Joined             time.Time `json:"joined"`
 	CreatedAt          time.Time `json:"createdat"`
 	UpdatedAt          time.Time `json:"updatedat"`
@@ -289,12 +290,11 @@ func MCKey(c *gin.Context, gid string) string {
 
 func IsAdmin(c *gin.Context) bool {
 	cu := CurrentFrom(c)
-	return cu != nil && cu.isAdmin
-	// return user.IsAdmin(c)
+	return cu != nil && cu.Admin
 }
 
 func (u *User) IsAdmin() bool {
-	return u != nil && u.isAdmin
+	return u != nil && u.Admin
 }
 
 func (u *User) IsAdminOrCurrent(c *gin.Context) bool {
