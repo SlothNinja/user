@@ -17,7 +17,6 @@ import (
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 	"google.golang.org/appengine"
-	"google.golang.org/appengine/user"
 )
 
 type User struct {
@@ -504,7 +503,7 @@ func RequireAdmin(c *gin.Context) {
 	log.Debugf("Entering")
 	defer log.Debugf("Exiting")
 
-	if !user.IsAdmin(c) {
+	if !IsAdmin(c) {
 		log.Warningf("user not admin.")
 		c.Redirect(http.StatusSeeOther, "/")
 		c.Abort()
