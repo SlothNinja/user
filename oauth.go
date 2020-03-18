@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -351,6 +352,37 @@ func Auth(path string) gin.HandlerFunc {
 		// 	return
 		// }
 	}
+}
+
+func As(c *gin.Context) {
+	log.Debugf("Entering")
+	defer log.Debugf("Exiting")
+
+	dsClient, err := datastore.NewClient(c, "")
+	if err != nil {
+		log.Errorf("unable to connect to datastore")
+		c.AbortWithStatus(http.StatusInternalServerError)
+		return
+	}
+
+	uid, err := strconv.ParseInt(c.Param("uid"), 10, 64)
+	if err != nil {
+		log.Errorf(err.Error())
+		c.AbortWithStatus(http.StatusInternalServerError)
+		return
+	}
+
+	u := New(c, uid)
+	err = dsClient.Get(c, u.Key, u)
+	if err != nil {
+		log.Errorf(err.Error())
+		c.AbortWithStatus(http.StatusInternalServerError)
+		return
+	}
+
+	st := NewSessionToken(u, "", true)
+	saveToSessionAndReturnTo(c, st, homePath)
+	return
 }
 
 func getUInfo(c *gin.Context, path string) (Info, error) {

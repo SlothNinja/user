@@ -1,19 +1,29 @@
 module github.com/SlothNinja/user
 
 require (
+	cloud.google.com/go v0.55.0 // indirect
 	cloud.google.com/go/datastore v1.1.0
-	github.com/SlothNinja/atf v0.0.0-20200317225324-62570fca35fc // indirect
-	github.com/SlothNinja/confucius v0.0.0-20200317231415-f88d2a1f7df7 // indirect
-	github.com/SlothNinja/got v0.0.0-20200317230549-03cb62567304 // indirect
-	github.com/SlothNinja/indonesia v0.0.0-20200317231213-d802616702b1 // indirect
+	cloud.google.com/go/pubsub v1.3.1 // indirect
 	github.com/SlothNinja/log v0.0.2
-	github.com/SlothNinja/tammany v0.0.0-20200317231135-3434b4291da0 // indirect
-	github.com/SlothNinja/user-controller v0.0.0-20200316005833-9e9d88e08a52 // indirect
-	github.com/SlothNinja/welcome v0.0.0-20200316013820-b64c86a9096e // indirect
 	github.com/gin-contrib/sessions v0.0.3
 	github.com/gin-gonic/gin v1.5.0
+	github.com/go-playground/universal-translator v0.17.0 // indirect
 	github.com/gofrs/uuid v3.2.0+incompatible
 	github.com/gorilla/securecookie v1.1.1
+	github.com/gorilla/sessions v1.2.0 // indirect
+	github.com/json-iterator/go v1.1.9 // indirect
+	github.com/kr/text v0.2.0 // indirect
+	github.com/leodido/go-urn v1.2.0 // indirect
+	github.com/mattn/go-isatty v0.0.12 // indirect
+	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
+	github.com/modern-go/reflect2 v1.0.1 // indirect
+	github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e // indirect
+	github.com/stretchr/testify v1.5.1 // indirect
 	golang.org/x/oauth2 v0.0.0-20200107190931-bf48bf16ab8d
+	golang.org/x/tools v0.0.0-20200318150045-ba25ddc85566 // indirect
 	google.golang.org/appengine v1.6.5
+	google.golang.org/genproto v0.0.0-20200318110522-7735f76e9fa5 // indirect
+	gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f // indirect
+	gopkg.in/go-playground/validator.v9 v9.31.0 // indirect
+	gopkg.in/yaml.v2 v2.2.8 // indirect
 )
