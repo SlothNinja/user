@@ -14,9 +14,9 @@ import (
 
 	"cloud.google.com/go/datastore"
 	"github.com/SlothNinja/log"
+	"github.com/SlothNinja/sn"
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
-	"google.golang.org/appengine"
 )
 
 type User struct {
@@ -275,7 +275,7 @@ func AllQuery(c *gin.Context) *datastore.Query {
 //}
 //
 func MCKey(c *gin.Context, gid string) string {
-	return appengine.VersionID(c) + gid
+	return sn.VersionID() + gid
 }
 
 //func setByGoogleID(c *gin.Context, gid string, u *User) error {

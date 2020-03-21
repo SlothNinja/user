@@ -169,34 +169,34 @@ func NewOAuth(id string) OAuth {
 	return OAuth{Key: NewKeyOAuth(id)}
 }
 
-func ByEmail(c *gin.Context, email string) (OAuth, error) {
-	log.Debugf("Entering")
-	defer log.Debugf("Exiting")
-
-	log.Debugf("email: %s", email)
-	email = strings.ToLower(strings.TrimSpace(email))
-	log.Debugf("email: %s", email)
-
-	dsClient, err := datastore.NewClient(c, "")
-	if err != nil {
-		return OAuth{}, err
-	}
-
-	q := datastore.NewQuery(oauthKind).
-		Ancestor(pk()).
-		Filter("Equal=", email)
-
-	var oas []OAuth
-	_, err = dsClient.GetAll(c, q, oas)
-	if err != nil {
-		return OAuth{}, err
-	}
-	l := len(oas)
-	if l != 1 {
-		return OAuth{}, fmt.Errorf("found %d, expect 1", l)
-	}
-	return oas[0], nil
-}
+// func ByEmail(c *gin.Context, email string) (OAuth, error) {
+// 	log.Debugf("Entering")
+// 	defer log.Debugf("Exiting")
+//
+// 	log.Debugf("email: %s", email)
+// 	email = strings.ToLower(strings.TrimSpace(email))
+// 	log.Debugf("email: %s", email)
+//
+// 	dsClient, err := datastore.NewClient(c, "")
+// 	if err != nil {
+// 		return OAuth{}, err
+// 	}
+//
+// 	q := datastore.NewQuery(oauthKind).
+// 		Ancestor(pk()).
+// 		Filter("Equal=", email)
+//
+// 	var oas []OAuth
+// 	_, err = dsClient.GetAll(c, q, oas)
+// 	if err != nil {
+// 		return OAuth{}, err
+// 	}
+// 	l := len(oas)
+// 	if l != 1 {
+// 		return OAuth{}, fmt.Errorf("found %d, expect 1", l)
+// 	}
+// 	return oas[0], nil
+// }
 
 func Auth(path string) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -443,6 +443,12 @@ func saveToSessionAndReturnTo(c *gin.Context, st sessionToken, path string) {
 }
 
 func getByEmail(c *gin.Context, email string) (*User, error) {
+	log.Debugf("Entering")
+	defer log.Debugf("Exiting")
+
+	email = strings.ToLower(strings.TrimSpace(email))
+	log.Debugf("email: %s", email)
+
 	dsClient, err := datastore.NewClient(c, "")
 	if err != nil {
 		return nil, err
