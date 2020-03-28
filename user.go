@@ -506,26 +506,31 @@ func RequireAdmin(c *gin.Context) {
 }
 
 func (client Client) Fetch(c *gin.Context) {
-	log.Debugf("Entering user#Fetch")
-	defer log.Debugf("Exiting user#Fetch")
+	log.Debugf("Entering")
+	defer log.Debugf("Exiting")
 
-	uid, err := getUID(c)
-	if err != nil || uid == NotFound {
-		log.Errorf("getUID error: %v", err.Error())
-		c.Redirect(http.StatusSeeOther, "/")
-		c.Abort()
-		return
-	}
-
-	u := New(c, uid)
-	err = client.Get(c, u.Key, u)
+	u, err := client.GetUser(c)
 	if err != nil {
-		log.Errorf("Unable to get user for id: %v", c.Param("uid"))
+		log.Errorf(err.Error())
 		c.Redirect(http.StatusSeeOther, "/")
 		c.Abort()
 		return
 	}
 	WithUser(c, u)
+}
+
+func (client Client) GetUser(c *gin.Context) (*User, error) {
+	log.Debugf("Entering")
+	defer log.Debugf("Exiting")
+
+	uid, err := getUID(c)
+	if err != nil {
+		return nil, err
+	}
+
+	u := New(c, uid)
+	err = client.Get(c, u.Key, u)
+	return u, err
 }
 
 func (client Client) FetchAll(c *gin.Context) {
@@ -614,11 +619,8 @@ func (client Client) getFiltered(c *gin.Context, start, length string) (us []int
 //	}
 //}
 
-func getUID(c *gin.Context) (id int64, err error) {
-	if id, err = strconv.ParseInt(c.Param(uidParam), 10, 64); err != nil {
-		id = NotFound
-	}
-	return
+func getUID(c *gin.Context) (int64, error) {
+	return strconv.ParseInt(c.Param(uidParam), 10, 64)
 }
 
 func Fetched(c *gin.Context) *User {
