@@ -19,12 +19,17 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+type Client struct {
+	*datastore.Client
+}
+
+func NewClient(dsClient *datastore.Client) Client {
+	return Client{dsClient}
+}
+
 type User struct {
-	c *gin.Context
-	// isAdmin bool
+	c   *gin.Context
 	Key *datastore.Key `datastore:"__key__"`
-	// ID      int64          `gae:"$id"`
-	// Parent  *datastore.Key `gae:"$parent"`
 	Data
 }
 
@@ -191,30 +196,30 @@ func NewKeyFor(c *gin.Context, id int64) *datastore.Key {
 //	return u, nil
 //}
 
-func ByGoogleID(c *gin.Context, gid string) (nu *NUser, err error) {
-	log.Debugf("Entering")
-	defer log.Debugf("Exiting")
-
-	u := New(c, 0)
-	u.GoogleID = gid
-	nu = ToNUser(c, u)
-	log.Debugf("nu: %#v", nu)
-
-	dsClient, err := datastore.NewClient(c, "")
-	if err != nil {
-		return nil, err
-	}
-
-	if err = dsClient.Get(c, nu.Key, nu); err != nil {
-		if err == datastore.ErrNoSuchEntity {
-			err = ErrNotFound
-		}
-		log.Warningf(err.Error())
-		return
-	}
-
-	return
-}
+// func ByGoogleID(c *gin.Context, gid string) (nu *NUser, err error) {
+// 	log.Debugf("Entering")
+// 	defer log.Debugf("Exiting")
+//
+// 	u := New(c, 0)
+// 	u.GoogleID = gid
+// 	nu = ToNUser(c, u)
+// 	log.Debugf("nu: %#v", nu)
+//
+// 	dsClient, err := datastore.NewClient(c, "")
+// 	if err != nil {
+// 		return nil, err
+// 	}
+//
+// 	if err = dsClient.Get(c, nu.Key, nu); err != nil {
+// 		if err == datastore.ErrNoSuchEntity {
+// 			err = ErrNotFound
+// 		}
+// 		log.Warningf(err.Error())
+// 		return
+// 	}
+//
+// 	return
+// }
 
 //func GetMulti(c *gin.Context, ks []*datastore.Key) (Users, error) {
 //	us := make([]*User, len(ks))
@@ -321,7 +326,7 @@ func GravatarURL(email string, options ...string) string {
 	return fmt.Sprintf("http://www.gravatar.com/avatar/%s?s=%s&d=monsterid", md5string, size)
 }
 
-func (u *User) Update(c *gin.Context) error {
+func (client Client) Update(c *gin.Context, u *User) error {
 	obj := struct {
 		Name               string `form:"name"`
 		Email              string `form:"email"`
@@ -349,7 +354,8 @@ func (u *User) Update(c *gin.Context) error {
 	}
 
 	if u.IsAdminOrCurrent(c) {
-		if err := u.updateName(c, obj.Name); err != nil {
+		err = client.updateName(c, u, obj.Name)
+		if err != nil {
 			return err
 		}
 		u.EmailNotifications = obj.EmailNotifications
@@ -358,7 +364,7 @@ func (u *User) Update(c *gin.Context) error {
 	return nil
 }
 
-func (u *User) updateName(c *gin.Context, n string) error {
+func (client Client) updateName(c *gin.Context, u *User, n string) error {
 	matcher := regexp.MustCompile(`^[A-Za-z][A-Za-z0-9._%+\-]+$`)
 
 	switch {
@@ -369,7 +375,7 @@ func (u *User) updateName(c *gin.Context, n string) error {
 	case !matcher.MatchString(n):
 		return fmt.Errorf("%q is not a valid user name.", n)
 	default:
-		uniq, err := NameIsUnique(c, n)
+		uniq, err := client.nameIsUnique(c, n)
 		if err != nil {
 			return err
 		}
@@ -382,17 +388,11 @@ func (u *User) updateName(c *gin.Context, n string) error {
 	}
 }
 
-func NameIsUnique(c *gin.Context, name string) (bool, error) {
+func (client Client) nameIsUnique(c *gin.Context, name string) (bool, error) {
 	LCName := strings.ToLower(name)
-
-	dsClient, err := datastore.NewClient(c, "")
-	if err != nil {
-		return false, err
-	}
-
 	q := datastore.NewQuery("User").Filter("LCName=", LCName)
 
-	cnt, err := dsClient.Count(c, q)
+	cnt, err := client.Count(c, q)
 	if err != nil {
 		return false, err
 	}
@@ -444,38 +444,33 @@ func PathFor(uid int64) template.HTML {
 // 	WithCurrent(c, u)
 // }
 
-func GetCUserHandler(c *gin.Context) {
-	log.Debugf("Entering")
-	defer log.Debugf("Exiting")
+func (client Client) GetCUserHandler() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		log.Debugf("Entering")
+		defer log.Debugf("Exiting")
 
-	session := sessions.Default(c)
-	token, ok := SessionTokenFrom(session)
-	if !ok {
-		log.Warningf("missing token")
-		return
-	}
+		session := sessions.Default(c)
+		token, ok := SessionTokenFrom(session)
+		if !ok {
+			log.Warningf("missing token")
+			return
+		}
 
-	if token.Loaded {
+		if token.Loaded {
+			u := New(c, token.ID())
+			u.Data = token.User.Data
+			WithCurrent(c, u)
+			return
+		}
+
 		u := New(c, token.ID())
-		u.Data = token.User.Data
+		err := client.Get(c, u.Key, u)
+		if err != nil {
+			log.Warningf(err.Error())
+			return
+		}
 		WithCurrent(c, u)
-		return
 	}
-
-	dsClient, err := datastore.NewClient(c, "")
-	if err != nil {
-		log.Warningf("Client error: %v", err)
-		return
-	}
-
-	u := New(c, token.ID())
-	err = dsClient.Get(c, u.Key, u)
-	if err != nil {
-		log.Warningf(err.Error())
-		return
-	}
-	log.Debugf("u: %#v", u)
-	WithCurrent(c, u)
 }
 
 // Use after GetGUserHandler and GetUserHandler handlers
@@ -510,7 +505,7 @@ func RequireAdmin(c *gin.Context) {
 	}
 }
 
-func Fetch(c *gin.Context) {
+func (client Client) Fetch(c *gin.Context) {
 	log.Debugf("Entering user#Fetch")
 	defer log.Debugf("Exiting user#Fetch")
 
@@ -523,29 +518,21 @@ func Fetch(c *gin.Context) {
 	}
 
 	u := New(c, uid)
-	// u.ID = uid
-	dsClient, err := datastore.NewClient(c, "")
+	err = client.Get(c, u.Key, u)
 	if err != nil {
-		log.Errorf(err.Error())
+		log.Errorf("Unable to get user for id: %v", c.Param("uid"))
 		c.Redirect(http.StatusSeeOther, "/")
 		c.Abort()
 		return
 	}
-
-	if err = dsClient.Get(c, u.Key, u); err != nil {
-		log.Errorf("Unable to get user for id: %v", c.Param("uid"))
-		c.Redirect(http.StatusSeeOther, "/")
-		c.Abort()
-	} else {
-		WithUser(c, u)
-	}
+	WithUser(c, u)
 }
 
-func FetchAll(c *gin.Context) {
+func (client Client) FetchAll(c *gin.Context) {
 	log.Debugf("Entering")
 	defer log.Debugf("Exiting")
 
-	us, cnt, err := getFiltered(c, c.PostForm("start"), c.PostForm("length"))
+	us, cnt, err := client.getFiltered(c, c.PostForm("start"), c.PostForm("length"))
 
 	if err != nil {
 		log.Errorf(err.Error())
@@ -555,17 +542,12 @@ func FetchAll(c *gin.Context) {
 	withUsers(withCount(c, cnt), us)
 }
 
-func getFiltered(c *gin.Context, start, length string) (us []interface{}, cnt int64, err error) {
+func (client Client) getFiltered(c *gin.Context, start, length string) (us []interface{}, cnt int64, err error) {
 	log.Debugf("Entering")
 	defer log.Debugf("Exiting")
 
-	dsClient, err := datastore.NewClient(c, "")
-	if err != nil {
-		return nil, 0, err
-	}
-
 	q := AllQuery(c).Order("GoogleID").KeysOnly()
-	icnt, err := dsClient.Count(c, q)
+	icnt, err := client.Count(c, q)
 	if err != nil {
 		return
 	}
@@ -583,7 +565,7 @@ func getFiltered(c *gin.Context, start, length string) (us []interface{}, cnt in
 		}
 	}
 
-	ks, err := dsClient.GetAll(c, q, nil)
+	ks, err := client.GetAll(c, q, nil)
 	if err != nil {
 		return
 	}
@@ -602,7 +584,7 @@ func getFiltered(c *gin.Context, start, length string) (us []interface{}, cnt in
 		}
 	}
 
-	err = dsClient.GetMulti(c, ks, us)
+	err = client.GetMulti(c, ks, us)
 	return
 }
 
