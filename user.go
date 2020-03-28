@@ -375,7 +375,7 @@ func (client Client) updateName(c *gin.Context, u *User, n string) error {
 	case !matcher.MatchString(n):
 		return fmt.Errorf("%q is not a valid user name.", n)
 	default:
-		uniq, err := client.nameIsUnique(c, n)
+		uniq, err := client.NameIsUnique(c, n)
 		if err != nil {
 			return err
 		}
@@ -388,7 +388,7 @@ func (client Client) updateName(c *gin.Context, u *User, n string) error {
 	}
 }
 
-func (client Client) nameIsUnique(c *gin.Context, name string) (bool, error) {
+func (client Client) NameIsUnique(c *gin.Context, name string) (bool, error) {
 	LCName := strings.ToLower(name)
 	q := datastore.NewQuery("User").Filter("LCName=", LCName)
 
