@@ -1,7 +1,7 @@
 module github.com/SlothNinja/user
 
 require (
-	cloud.google.com/go v0.55.0 // indirect
+	cloud.google.com/go v0.56.0 // indirect
 	cloud.google.com/go/datastore v1.1.0
 	cloud.google.com/go/pubsub v1.3.1 // indirect
 	github.com/SlothNinja/log v0.0.2
@@ -16,10 +16,8 @@ require (
 	github.com/modern-go/reflect2 v1.0.1 // indirect
 	github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e // indirect
 	github.com/stretchr/testify v1.5.1 // indirect
-	golang.org/x/net v0.0.0-20200324143707-d3edc9973b7e // indirect
 	golang.org/x/oauth2 v0.0.0-20200107190931-bf48bf16ab8d
-	golang.org/x/sys v0.0.0-20200327173247-9dae0f8f5775 // indirect
-	golang.org/x/tools v0.0.0-20200327195553-82bb89366a1e // indirect
-	google.golang.org/genproto v0.0.0-20200326112834-f447254575fd // indirect
+	golang.org/x/tools v0.0.0-20200402223321-bcf690261a44 // indirect
+	google.golang.org/genproto v0.0.0-20200402124713-8ff61da6d932 // indirect
 	gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f // indirect
 )
