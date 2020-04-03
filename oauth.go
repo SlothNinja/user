@@ -169,7 +169,36 @@ func NewOAuth(id string) OAuth {
 	return OAuth{Key: NewKeyOAuth(id)}
 }
 
-func (client Client) Auth(path string) gin.HandlerFunc {
+// func ByEmail(c *gin.Context, email string) (OAuth, error) {
+// 	log.Debugf("Entering")
+// 	defer log.Debugf("Exiting")
+//
+// 	log.Debugf("email: %s", email)
+// 	email = strings.ToLower(strings.TrimSpace(email))
+// 	log.Debugf("email: %s", email)
+//
+// 	dsClient, err := datastore.NewClient(c, "")
+// 	if err != nil {
+// 		return OAuth{}, err
+// 	}
+//
+// 	q := datastore.NewQuery(oauthKind).
+// 		Ancestor(pk()).
+// 		Filter("Equal=", email)
+//
+// 	var oas []OAuth
+// 	_, err = dsClient.GetAll(c, q, oas)
+// 	if err != nil {
+// 		return OAuth{}, err
+// 	}
+// 	l := len(oas)
+// 	if l != 1 {
+// 		return OAuth{}, fmt.Errorf("found %d, expect 1", l)
+// 	}
+// 	return oas[0], nil
+// }
+
+func Auth(path string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		log.Debugf("Entering")
 		defer log.Debugf("Exiting")
@@ -182,10 +211,19 @@ func (client Client) Auth(path string) gin.HandlerFunc {
 		}
 
 		oaid := GenOAuthID(uInfo.Sub)
-		oa, err := client.getOAuth(c, oaid)
+		oa, err := getOAuth(c, oaid)
+		// Succesfully pulled oauth id from datastore
+
+		u := New(c, oa.ID)
 		if err == nil {
-			u := New(c, oa.ID)
-			err = client.Get(c, u.Key, u)
+			dsClient, err := datastore.NewClient(c, "")
+			if err != nil {
+				log.Errorf("unable to connect to datastore")
+				c.AbortWithStatus(http.StatusInternalServerError)
+				return
+			}
+
+			err = dsClient.Get(c, u.Key, u)
 			if err != nil {
 				log.Errorf(err.Error())
 				c.AbortWithStatus(http.StatusInternalServerError)
@@ -199,7 +237,7 @@ func (client Client) Auth(path string) gin.HandlerFunc {
 
 		// Datastore error other than missing entity.
 		if err != datastore.ErrNoSuchEntity {
-			log.Errorf(err.Error())
+			log.Errorf("unable to get user for key: %#v", u.Key)
 			c.AbortWithStatus(http.StatusBadRequest)
 			return
 		}
@@ -207,11 +245,27 @@ func (client Client) Auth(path string) gin.HandlerFunc {
 		// oauth id not present in datastore
 		// Check to see if other entities exist for same email address.
 		// If so, use old entities for user
-		u, err := client.getByEmail(c, uInfo.Email)
+		u, err = getByEmail(c, uInfo.Email)
+		// if err != nil {
+		// 	log.Errorf(err.Error())
+		// 	c.AbortWithStatus(http.StatusBadRequest)
+		// 	return
+		// }
+
+		log.Debugf("getByEmail => u: %v\nerr: %v", u, err)
+
+		// u, err = u.migrateOld(c, ks)
 		if err == nil {
+			dsClient, err := datastore.NewClient(c, "")
+			if err != nil {
+				log.Errorf(err.Error())
+				c.AbortWithStatus(http.StatusBadRequest)
+				return
+			}
+
 			oa := NewOAuth(oaid)
 			oa.ID = u.ID()
-			_, err = client.Put(c, oa.Key, &oa)
+			_, err = dsClient.Put(c, oa.Key, &oa)
 			if err != nil {
 				log.Errorf(err.Error())
 				c.AbortWithStatus(http.StatusBadRequest)
@@ -228,12 +282,88 @@ func (client Client) Auth(path string) gin.HandlerFunc {
 		st := NewSessionToken(u, uInfo.Sub, false)
 		saveToSessionAndReturnTo(c, st, userNewPath)
 		return
+
+		// l := len(ks)
+		// switch l {
+		// case 0: // If no keys, then no old entities for user
+		// 	log.Warningf(
+		// 		"creating new user for %q without migratition from prior users",
+		// 		uInfo.Email,
+		// 	)
+		// 	u.Email = uInfo.Email
+		// 	saveToSessionAndReturnTo(c, u, userNewPath)
+		// 	return
+		// case 1:
+		// 	log.Infof("attempting to migrate user with key %#v and email %q", ks[0], uInfo.Email)
+		// 	migrateOld(c, ks)
+		// 	ou := New(0)
+		// 	err = dsClient.Get(c, ks[0], ou)
+		// 	if err == nil {
+		// 		u = u.fromOld1(ou)
+		// 		_, err = dsClient.Put(c, u.Key, &u)
+		// 		if err == nil {
+		// 			log.Infof("successfully migrated user for email %q", uInfo.Email)
+		// 			u.Loaded = true
+		// 			saveToSessionAndReturnTo(c, u, homePath)
+		// 			return
+		// 		}
+		// 	}
+		// 	log.Warningf("unable to load user for key %#v due to error: %s", ks[0], err.Error())
+		// 	log.Warningf(
+		// 		"initiating creation of new user for %q without migrating from prior user",
+		// 		uInfo.Email,
+		// 	)
+		// 	u.Email = uInfo.Email
+		// 	saveToSessionAndReturnTo(c, u, userNewPath)
+		// 	return
+		// case 2:
+		// 	ok := ks[0]
+		// 	if ok.Name == "" {
+		// 		ok = ks[1]
+		// 	}
+		// 	log.Infof("attempting to migrate user with key %#v and email %q", ok, uInfo.Email)
+		// 	ou := NNew(ok.Name)
+		// 	err = dsClient.Get(c, ou.Key, ou)
+		// 	if err == nil {
+		// 		u = u.fromOld2(ou)
+		// 		_, err = dsClient.Put(c, u.Key, &u)
+		// 		if err == nil {
+		// 			log.Infof("successfully migrated user for email %q", uInfo.Email)
+		// 			u.Loaded = true
+		// 			saveToSessionAndReturnTo(c, u, homePath)
+		// 			return
+		// 		}
+		// 	}
+		// 	log.Warningf("unable to load user for key %#v due to error: %s", ok, err.Error())
+		// 	log.Warningf(
+		// 		"initiating creation of new user for %q without migrating from prior user",
+		// 		uInfo.Email,
+		// 	)
+		// 	u.Email = uInfo.Email
+		// 	saveToSessionAndReturnTo(c, u, userNewPath)
+		// 	return
+		// default:
+		// 	log.Warningf(
+		// 		"initiating creation of new user for %q without migrating from prior user",
+		// 		uInfo.Email,
+		// 	)
+		// 	u.Email = uInfo.Email
+		// 	saveToSessionAndReturnTo(c, u, userNewPath)
+		// 	return
+		// }
 	}
 }
 
-func (client Client) As(c *gin.Context) {
+func As(c *gin.Context) {
 	log.Debugf("Entering")
 	defer log.Debugf("Exiting")
+
+	dsClient, err := datastore.NewClient(c, "")
+	if err != nil {
+		log.Errorf("unable to connect to datastore")
+		c.AbortWithStatus(http.StatusInternalServerError)
+		return
+	}
 
 	uid, err := strconv.ParseInt(c.Param("uid"), 10, 64)
 	if err != nil {
@@ -243,7 +373,7 @@ func (client Client) As(c *gin.Context) {
 	}
 
 	u := New(c, uid)
-	err = client.Get(c, u.Key, u)
+	err = dsClient.Get(c, u.Key, u)
 	if err != nil {
 		log.Errorf(err.Error())
 		c.AbortWithStatus(http.StatusInternalServerError)
@@ -290,9 +420,13 @@ func getUInfo(c *gin.Context, path string) (Info, error) {
 	return uInfo, nil
 }
 
-func (client Client) getOAuth(c *gin.Context, id string) (OAuth, error) {
+func getOAuth(c *gin.Context, id string) (OAuth, error) {
 	u := NewOAuth(id)
-	err := client.Get(c, u.Key, &u)
+	dsClient, err := datastore.NewClient(c, "")
+	if err != nil {
+		return u, err
+	}
+	err = dsClient.Get(c, u.Key, &u)
 	return u, err
 }
 
@@ -308,19 +442,24 @@ func saveToSessionAndReturnTo(c *gin.Context, st sessionToken, path string) {
 	return
 }
 
-func (client Client) getByEmail(c *gin.Context, email string) (*User, error) {
+func getByEmail(c *gin.Context, email string) (*User, error) {
 	log.Debugf("Entering")
 	defer log.Debugf("Exiting")
 
 	email = strings.ToLower(strings.TrimSpace(email))
 	log.Debugf("email: %s", email)
 
+	dsClient, err := datastore.NewClient(c, "")
+	if err != nil {
+		return nil, err
+	}
+
 	q := datastore.NewQuery(uKind).
 		Ancestor(RootKey(c)).
 		Filter("Email=", email).
 		KeysOnly()
 
-	ks, err := client.GetAll(c, q, nil)
+	ks, err := dsClient.GetAll(c, q, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -328,18 +467,23 @@ func (client Client) getByEmail(c *gin.Context, email string) (*User, error) {
 	log.Debugf("ks: %v", ks)
 	for i := range ks {
 		if ks[i].ID != 0 {
-			return client.getByID(c, ks[i].ID)
+			return getByID(c, ks[i].ID)
 		}
 	}
 	return nil, errors.New("unable to find user")
 }
 
-func (client Client) getByID(c *gin.Context, id int64) (*User, error) {
+func getByID(c *gin.Context, id int64) (*User, error) {
 	log.Debugf("Entering")
 	defer log.Debugf("Exiting")
 
+	dsClient, err := datastore.NewClient(c, "")
+	if err != nil {
+		return nil, err
+	}
+
 	u := New(c, id)
-	err := client.Get(c, u.Key, u)
+	err = dsClient.Get(c, u.Key, u)
 	return u, err
 }
 
