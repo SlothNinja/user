@@ -187,7 +187,7 @@ func GravatarURL(email string, options ...string) string {
 	hash := md5.New()
 	hash.Write([]byte(email))
 	md5string := fmt.Sprintf("%x", hash.Sum(nil))
-	return fmt.Sprintf("http://www.gravatar.com/avatar/%s?s=%s&d=monsterid", md5string, size)
+	return fmt.Sprintf("https://www.gravatar.com/avatar/%s?s=%s&d=monsterid", md5string, size)
 }
 
 func (client Client) Update(c *gin.Context, u *User) error {
