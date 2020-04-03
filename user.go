@@ -115,30 +115,6 @@ func (u User) ID() int64 {
 	return u.Key.ID
 }
 
-type NUser struct {
-	Key   *datastore.Key `datastore:"__key__"`
-	OldID int64          `json:"oldid"`
-	Data
-}
-
-func (nu NUser) ID() string {
-	if nu.Key == nil {
-		return ""
-	}
-	return nu.Key.Name
-}
-
-func NNew(c *gin.Context, id string) *NUser {
-	return &NUser{Key: datastore.NameKey(kind, id, RootKey(c))}
-}
-
-func ToNUser(c *gin.Context, u *User) (nu *NUser) {
-	nu = NNew(c, GenID(u.GoogleID))
-	nu.OldID = u.ID()
-	nu.Data = u.Data
-	return
-}
-
 func GenID(gid string) string {
 	return fmt.Sprintf("%x", sha1.Sum([]byte(salt+gid)))
 }
@@ -170,10 +146,6 @@ func (u *User) IsAdminOrCurrent(c *gin.Context) bool {
 }
 
 func (u *User) Gravatar(options ...string) template.URL {
-	return template.URL(GravatarURL(u.Email, options...))
-}
-
-func (u *NUser) Gravatar(options ...string) template.URL {
 	return template.URL(GravatarURL(u.Email, options...))
 }
 
@@ -361,16 +333,16 @@ func (client Client) FetchAll(c *gin.Context) {
 	withUsers(withCount(c, cnt), us)
 }
 
-func (client Client) getFiltered(c *gin.Context, start, length string) (us []interface{}, cnt int64, err error) {
+func (client Client) getFiltered(c *gin.Context, start, length string) ([]*User, int64, error) {
 	log.Debugf("Entering")
 	defer log.Debugf("Exiting")
 
-	q := AllQuery(c).Order("GoogleID").KeysOnly()
+	q := AllQuery(c).KeysOnly()
 	icnt, err := client.Count(c, q)
 	if err != nil {
-		return
+		return nil, 0, err
 	}
-	cnt = int64(icnt)
+	cnt := int64(icnt)
 
 	if start != "" {
 		if st, err := strconv.ParseInt(start, 10, 32); err == nil {
@@ -386,25 +358,19 @@ func (client Client) getFiltered(c *gin.Context, start, length string) (us []int
 
 	ks, err := client.GetAll(c, q, nil)
 	if err != nil {
-		return
+		return nil, 0, err
 	}
 
-	l := len(ks)
-	us = make([]interface{}, l)
-	for i := range us {
-		if id := ks[i].ID; id != 0 {
-			u := New(c, id)
-			// u.ID = id
-			us[i] = u
-		} else {
-			u := NNew(c, ks[i].Name)
-			// u.ID = ks[i].StringID()
-			us[i] = u
+	var us []*User
+	for i := range ks {
+		id := ks[i].ID
+		if id != 0 {
+			us = append(us, New(c, id))
 		}
 	}
 
 	err = client.GetMulti(c, ks, us)
-	return
+	return us, cnt, err
 }
 
 func getUID(c *gin.Context) (id int64, err error) {
@@ -420,10 +386,6 @@ func Fetched(c *gin.Context) *User {
 
 func Gravatar(u *User) template.HTML {
 	return template.HTML(fmt.Sprintf(`<a href="/user/show/%d"><img src=%q alt="Gravatar" class="black-border" /></a>`, u.ID, u.Gravatar()))
-}
-
-func NGravatar(nu *NUser) template.HTML {
-	return template.HTML(fmt.Sprintf(`<a href="/user/show/%s"><img src=%q alt="Gravatar" class="black-border" /></a>`, nu.ID(), nu.Gravatar()))
 }
 
 func from(c *gin.Context, key string) (u *User) {
@@ -451,12 +413,12 @@ func WithCurrent(c *gin.Context, u *User) {
 	c.Set(currentKey, u)
 }
 
-func UsersFrom(c *gin.Context) (us []interface{}) {
-	us, _ = c.Value(usersKey).([]interface{})
-	return
+func UsersFrom(c *gin.Context) []*User {
+	us, _ := c.Value(usersKey).([]*User)
+	return us
 }
 
-func withUsers(c *gin.Context, us []interface{}) {
+func withUsers(c *gin.Context, us []*User) {
 	c.Set(usersKey, us)
 }
 
