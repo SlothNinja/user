@@ -60,6 +60,9 @@ func (u *User) Save() ([]datastore.Property, error) {
 	if u.CreatedAt.IsZero() {
 		u.CreatedAt = t
 	}
+	if u.Joined.IsZero() {
+		u.Joined = t
+	}
 	u.UpdatedAt = t
 	return datastore.SaveStruct(u)
 }
