@@ -35,35 +35,21 @@ func NewClient(dsClient *datastore.Client) Client {
 type User struct {
 	Key *datastore.Key `datastore:"__key__"`
 	Data
+	Stamps
 }
 
 type Data struct {
-	Name               string    `json:"name" form:"name"`
-	LCName             string    `json:"lcname"`
-	Email              string    `json:"email" form:"email"`
-	GoogleID           string    `json:"googleid"`
-	XMPPNotifications  bool      `json:"xmppnotifications"`
-	EmailNotifications bool      `json:"emailnotifications" form:"emailNotifications"`
-	EmailReminders     bool      `json:"emailreminders"`
-	Admin              bool      `json:"admin"`
-	Joined             time.Time `json:"joined"`
-	CreatedAt          time.Time `json:"createdat"`
-	UpdatedAt          time.Time `json:"updatedat"`
+	Name               string `json:"name" form:"name"`
+	LCName             string `json:"lcname"`
+	Email              string `json:"email" form:"email"`
+	EmailNotifications bool   `json:"emailNotifications"`
+	Admin              bool   `json:"admin"`
 }
 
-type Identity struct {
-	Key                *datastore.Key `json:"key" form:"key"`
-	Name               string         `json:"name" form:"name"`
-	Email              string         `json:"email" form:"email"`
-	EmailNotifications bool           `json:"emailnotifications" form:"emailNotifications"`
-	Admin              bool           `json:"admin" form:"admin"`
-}
-
-func (ident Identity) ID() int64 {
-	if ident.Key == nil {
-		return 0
-	}
-	return ident.Key.ID
+type Stamps struct {
+	Joined    time.Time `json:"joined"`
+	CreatedAt time.Time `json:"createdat"`
+	UpdatedAt time.Time `json:"updatedat"`
 }
 
 func (u *User) Load(ps []datastore.Property) error {
@@ -243,30 +229,28 @@ func FromSession(c *gin.Context) (*User, error) {
 	return u, err
 }
 
-func fromSession(c *gin.Context) (*User, int64, error) {
+func fromSession(c *gin.Context) (*User, *datastore.Key, error) {
 	session := sessions.Default(c)
 	token, ok := SessionTokenFrom(session)
 	if !ok {
-		return nil, 0, ErrMissingToken
+		return nil, nil, ErrMissingToken
 	}
 
 	if token.Loaded {
-		u := New(c, token.ID())
-		u.Data = token.User.Data
-		return u, 0, nil
+		return &User{Key: token.Key, Data: token.Data}, nil, nil
 	}
 
-	return nil, token.ID(), nil
+	return nil, token.Key, nil
 }
 
 func (client Client) Current(c *gin.Context) (*User, error) {
-	u, id, err := fromSession(c)
+	u, k, err := fromSession(c)
 	if err == nil || err == ErrMissingToken {
 		return u, err
 	}
 
-	u = New(c, id)
-	err = client.DS.Get(c, u.Key, u)
+	u = New(c, 0)
+	err = client.DS.Get(c, k, u)
 	return u, err
 }
 
