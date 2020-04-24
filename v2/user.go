@@ -35,21 +35,20 @@ func NewClient(dsClient *datastore.Client) Client {
 type User struct {
 	Key *datastore.Key `datastore:"__key__"`
 	Data
-	Stamps
 }
 
 type Data struct {
-	Name               string `json:"name" form:"name"`
-	LCName             string `json:"lcname"`
-	Email              string `json:"email" form:"email"`
-	EmailNotifications bool   `json:"emailNotifications"`
-	Admin              bool   `json:"admin"`
+	Name               string    `json:"name" form:"name"`
+	LCName             string    `json:"lcname"`
+	Email              string    `json:"email" form:"email"`
+	EmailNotifications bool      `json:"emailNotifications"`
+	Admin              bool      `json:"admin"`
+	Joined             time.Time `json:"joined"`
+	CreatedAt          time.Time `json:"createdat"`
+	UpdatedAt          time.Time `json:"updatedat"`
 }
 
 type Stamps struct {
-	Joined    time.Time `json:"joined"`
-	CreatedAt time.Time `json:"createdat"`
-	UpdatedAt time.Time `json:"updatedat"`
 }
 
 func (u *User) Load(ps []datastore.Property) error {
