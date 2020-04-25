@@ -76,16 +76,16 @@ type UserName struct {
 	GoogleID string
 }
 
-func RootKey(c *gin.Context) *datastore.Key {
+func rootKey() *datastore.Key {
 	return datastore.NameKey("Users", "root", nil)
 }
 
-func NewKey(c *gin.Context, id int64) *datastore.Key {
-	return datastore.IDKey(kind, id, RootKey(c))
+func NewKey(id int64) *datastore.Key {
+	return datastore.IDKey(kind, id, rootKey())
 }
 
-func New(c *gin.Context, id int64) *User {
-	return &User{Key: NewKey(c, id)}
+func New(id int64) *User {
+	return &User{Key: NewKey(id)}
 }
 
 func (u User) ID() int64 {
@@ -99,13 +99,8 @@ func GenID(gid string) string {
 	return fmt.Sprintf("%x", sha1.Sum([]byte(salt+gid)))
 }
 
-func NewKeyFor(c *gin.Context, id int64) *datastore.Key {
-	u := New(c, id)
-	return u.Key
-}
-
 func AllQuery(c *gin.Context) *datastore.Query {
-	return datastore.NewQuery(kind).Ancestor(RootKey(c))
+	return datastore.NewQuery(kind).Ancestor(rootKey())
 }
 
 func MCKey(c *gin.Context, gid string) string {
@@ -251,7 +246,7 @@ func (client Client) Current(c *gin.Context) (*User, error) {
 		return u, err
 	}
 
-	u = New(c, 0)
+	u = New(0)
 	err = client.DS.Get(c, k, u)
 	return u, err
 }
@@ -304,7 +299,7 @@ func (client Client) Fetch(c *gin.Context) {
 		return
 	}
 
-	u := New(c, uid)
+	u := New(uid)
 	err = client.DS.Get(c, u.Key, u)
 	if err != nil {
 		log.Errorf("Unable to get user for id: %v", c.Param("uid"))
@@ -361,7 +356,7 @@ func (client Client) getFiltered(c *gin.Context, start, length string) ([]*User,
 	for i := range ks {
 		id := ks[i].ID
 		if id != 0 {
-			us = append(us, New(c, id))
+			us = append(us, New(id))
 		}
 	}
 
