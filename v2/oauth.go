@@ -293,7 +293,7 @@ func (client Client) getByEmail(c *gin.Context, email string) (*User, error) {
 
 	email = strings.ToLower(strings.TrimSpace(email))
 	q := datastore.NewQuery(uKind).
-		Ancestor(rootKey()).
+		Ancestor(RootKey()).
 		Filter("Email=", email).
 		KeysOnly()
 

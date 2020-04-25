@@ -76,12 +76,12 @@ type UserName struct {
 	GoogleID string
 }
 
-func rootKey() *datastore.Key {
+func RootKey() *datastore.Key {
 	return datastore.NameKey("Users", "root", nil)
 }
 
 func NewKey(id int64) *datastore.Key {
-	return datastore.IDKey(kind, id, rootKey())
+	return datastore.IDKey(kind, id, RootKey())
 }
 
 func New(id int64) *User {
@@ -100,7 +100,7 @@ func GenID(gid string) string {
 }
 
 func AllQuery(c *gin.Context) *datastore.Query {
-	return datastore.NewQuery(kind).Ancestor(rootKey())
+	return datastore.NewQuery(kind).Ancestor(RootKey())
 }
 
 func MCKey(c *gin.Context, gid string) string {
