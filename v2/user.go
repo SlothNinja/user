@@ -3,6 +3,7 @@ package user
 import (
 	"crypto/md5"
 	"crypto/sha1"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -33,7 +34,7 @@ func NewClient(dsClient *datastore.Client) Client {
 }
 
 type User struct {
-	Key *datastore.Key `datastore:"__key__"`
+	Key *datastore.Key `datastore:"__key__" json:"key"`
 	Data
 }
 
@@ -41,11 +42,33 @@ type Data struct {
 	Name               string    `json:"name" form:"name"`
 	LCName             string    `json:"lcname"`
 	Email              string    `json:"email" form:"email"`
+	EmailHash          string    `json:"emailHash" form:"email-hash"`
 	EmailNotifications bool      `json:"emailNotifications"`
 	Admin              bool      `json:"admin"`
 	Joined             time.Time `json:"joined"`
 	CreatedAt          time.Time `json:"createdat"`
 	UpdatedAt          time.Time `json:"updatedat"`
+}
+
+func emailHash(email string) (string, error) {
+	email = strings.ToLower(strings.TrimSpace(email))
+	hash := md5.New()
+	_, err := hash.Write([]byte(email))
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%x", hash.Sum(nil)), nil
+}
+
+func (u User) MarshalJSON() ([]byte, error) {
+	type usr User
+	return json.Marshal(struct {
+		usr
+		ID int64 `json:"id"`
+	}{
+		usr: usr(u),
+		ID:  u.ID(),
+	})
 }
 
 type Stamps struct {

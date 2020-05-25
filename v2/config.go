@@ -34,6 +34,8 @@ const (
 	statsKind         = "Stats"
 	statsName         = "root"
 	statsKey          = "Stats"
+	msgEnter          = "Entering"
+	msgExit           = "Exiting"
 )
 
 var (

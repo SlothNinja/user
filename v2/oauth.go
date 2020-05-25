@@ -29,12 +29,19 @@ func init() {
 
 func Login(path string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		log.Debugf("Entering")
-		defer log.Debugf("Exiting")
+		log.Debugf(msgEnter)
+		defer log.Debugf(msgExit)
+
+		qpath, found := c.GetQuery("redirect")
+		log.Debugf("qpath: %s\nfound: %v", qpath, found)
+
+		s, err := base64.StdEncoding.DecodeString(qpath)
+		log.Debugf("s: %s\nerr: %v", s, err)
 
 		session := sessions.Default(c)
 		state := randToken(tokenLength)
 		session.Set(stateKey, state)
+		session.Set("redirect", qpath)
 		session.Save()
 
 		c.Redirect(http.StatusSeeOther, getLoginURL(c, path, state))
@@ -42,8 +49,8 @@ func Login(path string) gin.HandlerFunc {
 }
 
 func Logout(c *gin.Context) {
-	log.Debugf("Entering")
-	defer log.Debugf("Exiting")
+	log.Debugf(msgEnter)
+	defer log.Debugf(msgExit)
 
 	s := sessions.Default(c)
 	s.Delete(sessionKey)
@@ -60,8 +67,8 @@ func randToken(length int) string {
 }
 
 func getLoginURL(c *gin.Context, path, state string) string {
-	log.Debugf("Entering")
-	defer log.Debugf("Exiting")
+	log.Debugf(msgEnter)
+	defer log.Debugf(msgExit)
 
 	// State can be some kind of random generated hash string.
 	// See relevant RFC: http://tools.ietf.org/html/rfc6749#section-10.12
@@ -69,8 +76,8 @@ func getLoginURL(c *gin.Context, path, state string) string {
 }
 
 func oauth2Config(c *gin.Context, path string, scopes ...string) *oauth2.Config {
-	log.Debugf("Entering")
-	defer log.Debugf("Exiting")
+	log.Debugf(msgEnter)
+	defer log.Debugf(msgExit)
 
 	return &oauth2.Config{
 		ClientID:     os.Getenv("CLIENT_ID"),
@@ -146,14 +153,24 @@ func NewOAuth(id string) OAuth {
 
 func (client Client) Auth(path string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		log.Debugf("Entering")
-		defer log.Debugf("Exiting")
+		log.Debugf(msgEnter)
+		defer log.Debugf(msgExit)
 
 		uInfo, err := getUInfo(c, path)
 		if err != nil {
 			log.Errorf(err.Error())
 			c.Redirect(http.StatusSeeOther, homePath)
 			return
+		}
+
+		session := sessions.Default(c)
+		retrievedPath, ok := session.Get("redirect").(string)
+		var redirectPath string
+		if ok {
+			bs, err := base64.StdEncoding.DecodeString(retrievedPath)
+			if err == nil {
+				redirectPath = string(bs)
+			}
 		}
 
 		log.Debugf("uInfo: %#v\nerr: %v", uInfo, err)
@@ -170,8 +187,18 @@ func (client Client) Auth(path string) gin.HandlerFunc {
 				return
 			}
 
+			if u.EmailHash == "" {
+				hash, err := emailHash(u.Email)
+				if err != nil {
+					log.Errorf("unable to get user for %#v", uInfo)
+					c.Redirect(http.StatusSeeOther, homePath)
+					return
+				}
+				u.EmailHash = hash
+			}
+
 			st := NewSessionToken(u, uInfo.Sub, true)
-			saveToSessionAndReturnTo(c, st, homePath)
+			saveToSessionAndReturnTo(c, st, redirectPath)
 			return
 		}
 
@@ -196,13 +223,21 @@ func (client Client) Auth(path string) gin.HandlerFunc {
 				return
 			}
 			st := NewSessionToken(u, uInfo.Sub, true)
-			saveToSessionAndReturnTo(c, st, homePath)
+			saveToSessionAndReturnTo(c, st, redirectPath)
+			return
+		}
+
+		hash, err := emailHash(uInfo.Email)
+		if err != nil {
+			log.Errorf(err.Error())
+			c.Redirect(http.StatusSeeOther, homePath)
 			return
 		}
 
 		u = New(0)
 		u.Name = strings.Split(uInfo.Email, "@")[0]
 		u.Email = uInfo.Email
+		u.EmailHash = hash
 		st := NewSessionToken(u, uInfo.Sub, false)
 		saveToSessionAndReturnTo(c, st, userNewPath)
 		return
@@ -210,8 +245,8 @@ func (client Client) Auth(path string) gin.HandlerFunc {
 }
 
 func (client Client) As(c *gin.Context) {
-	log.Debugf("Entering")
-	defer log.Debugf("Exiting")
+	log.Debugf(msgEnter)
+	defer log.Debugf(msgExit)
 
 	uid, err := strconv.ParseInt(c.Param("uid"), 10, 64)
 	if err != nil {
@@ -288,8 +323,8 @@ func saveToSessionAndReturnTo(c *gin.Context, st *sessionToken, path string) {
 }
 
 func (client Client) getByEmail(c *gin.Context, email string) (*User, error) {
-	log.Debugf("Entering")
-	defer log.Debugf("Exiting")
+	log.Debugf(msgEnter)
+	defer log.Debugf(msgExit)
 
 	email = strings.ToLower(strings.TrimSpace(email))
 	q := datastore.NewQuery(uKind).
@@ -311,12 +346,26 @@ func (client Client) getByEmail(c *gin.Context, email string) (*User, error) {
 }
 
 func (client Client) getByID(c *gin.Context, id int64) (*User, error) {
-	log.Debugf("Entering")
-	defer log.Debugf("Exiting")
+	log.Debugf(msgEnter)
+	defer log.Debugf(msgExit)
 
 	u := New(id)
 	err := client.DS.Get(c, u.Key, u)
-	return u, err
+	if err != nil {
+		return nil, err
+	}
+
+	if u.EmailHash != "" {
+		return u, nil
+	}
+
+	hash, err := emailHash(u.Email)
+	if err != nil {
+		return nil, err
+	}
+	u.EmailHash = hash
+
+	return u, nil
 }
 
 type sessionToken struct {
