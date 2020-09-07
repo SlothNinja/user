@@ -39,11 +39,13 @@ type User struct {
 }
 
 type Data struct {
-	Name               string    `json:"name" form:"name"`
+	Name               string    `json:"name"`
 	LCName             string    `json:"lcname"`
-	Email              string    `json:"email" form:"email"`
-	EmailHash          string    `json:"emailHash" form:"email-hash"`
+	Email              string    `json:"email"`
+	EmailHash          string    `json:"emailHash"`
+	EmailReminders     bool      `json:"emailReminders"`
 	EmailNotifications bool      `json:"emailNotifications"`
+	GravType           string    `json:"gravType"`
 	Admin              bool      `json:"admin"`
 	Joined             time.Time `json:"joined"`
 	CreatedAt          time.Time `json:"createdat"`
@@ -87,6 +89,13 @@ func (u *User) Save() ([]datastore.Property, error) {
 		u.Joined = t
 	}
 	u.UpdatedAt = t
+	if u.EmailHash == "" {
+		hash, err := emailHash(u.Email)
+		if err != nil {
+			return nil, err
+		}
+		u.EmailHash = hash
+	}
 	return datastore.SaveStruct(u)
 }
 
@@ -161,29 +170,39 @@ func GravatarURL(email string, options ...string) string {
 }
 
 func (client Client) Update(c *gin.Context, u *User) error {
-	obj := struct {
-		Name               string `form:"name"`
-		Email              string `form:"email"`
-		EmailNotifications bool   `form:"emailNotifications"`
-	}{}
+	log.Debugf(msgEnter)
+	defer log.Debugf(msgExit)
 
-	err := c.ShouldBind(&obj)
+	cu, err := client.Current(c)
 	if err != nil {
 		return err
 	}
 
-	if IsAdmin(c) {
+	obj := New(0)
+	err = c.ShouldBind(obj)
+	if err != nil {
+		return err
+	}
+
+	log.Debugf("obj: %#v", obj)
+
+	if cu.Admin {
+		log.Debugf("is admin")
 		if obj.Email != "" {
+			log.Debugf("updating email")
 			u.Email = obj.Email
 		}
 	}
 
-	if u.IsAdminOrCurrent(c) {
+	if cu.Admin || (cu.ID() == u.ID()) {
+		log.Debugf("is admin or current")
 		err = client.updateName(c, u, obj.Name)
 		if err != nil {
 			return err
 		}
+		log.Debugf("updating emailNotifications and gravType")
 		u.EmailNotifications = obj.EmailNotifications
+		u.GravType = obj.GravType
 	}
 
 	return nil
@@ -251,7 +270,9 @@ func FromSession(c *gin.Context) (*User, error) {
 
 func fromSession(c *gin.Context) (*User, *datastore.Key, error) {
 	session := sessions.Default(c)
+	log.Debugf("session: %#v", session)
 	token, ok := SessionTokenFrom(session)
+	log.Debugf("token: %#v", token)
 	if !ok {
 		return nil, nil, ErrMissingToken
 	}
@@ -264,7 +285,11 @@ func fromSession(c *gin.Context) (*User, *datastore.Key, error) {
 }
 
 func (client Client) Current(c *gin.Context) (*User, error) {
+	log.Debugf(msgEnter)
+	defer log.Debugf(msgExit)
+
 	u, k, err := fromSession(c)
+	log.Debugf("u: %#v\nerr: %v", u, err)
 	if err == nil || err == ErrMissingToken {
 		return u, err
 	}
@@ -314,7 +339,7 @@ func (client Client) Fetch(c *gin.Context) {
 	log.Debugf("Entering")
 	defer log.Debugf("Exiting")
 
-	uid, err := getUID(c)
+	uid, err := getUID(c, uidParam)
 	if err != nil || uid == NotFound {
 		log.Errorf(err.Error())
 		c.Redirect(http.StatusSeeOther, "/")
@@ -331,6 +356,36 @@ func (client Client) Fetch(c *gin.Context) {
 		return
 	}
 	WithUser(c, u)
+}
+
+func (client Client) Get(c *gin.Context, id int64) (*User, error) {
+	log.Debugf(msgEnter)
+	defer log.Debugf(msgExit)
+
+	u := New(id)
+	err := client.DS.Get(c, u.Key, u)
+	return u, err
+}
+
+func (client Client) JSON(idParam string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		log.Debugf(msgEnter)
+		defer log.Debugf(msgExit)
+
+		uid, err := getUID(c, uidParam)
+		if err != nil {
+			JErr(c, err)
+			return
+		}
+
+		u, err := client.Get(c, uid)
+		if err != nil {
+			JErr(c, err)
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"user": u})
+	}
 }
 
 func (client Client) FetchAll(c *gin.Context) {
@@ -387,11 +442,8 @@ func (client Client) getFiltered(c *gin.Context, start, length string) ([]*User,
 	return us, cnt, err
 }
 
-func getUID(c *gin.Context) (id int64, err error) {
-	if id, err = strconv.ParseInt(c.Param(uidParam), 10, 64); err != nil {
-		id = NotFound
-	}
-	return
+func getUID(c *gin.Context, uidParam string) (int64, error) {
+	return strconv.ParseInt(c.Param(uidParam), 10, 64)
 }
 
 func Fetched(c *gin.Context) *User {

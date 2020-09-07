@@ -22,7 +22,7 @@ const (
 	HOST              = "HOST"
 	authPath          = "/auth"
 	sessionKey        = "session"
-	userNewPath       = "/user/new"
+	userNewPath       = "#/new"
 	tokenLength       = 32
 	uKind             = "User"
 	oauthsKind        = "OAuths"

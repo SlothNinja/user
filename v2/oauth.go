@@ -27,21 +27,26 @@ func init() {
 	gob.Register(new(sessionToken))
 }
 
+func getRedirectionPath(c *gin.Context) string {
+	log.Debugf(msgEnter)
+	defer log.Debugf(msgExit)
+
+	qpath, found := c.GetQuery("redirect")
+	if found {
+		return qpath
+	}
+	return base64.StdEncoding.EncodeToString([]byte(c.Request.Header.Get("Referer")))
+}
+
 func Login(path string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		log.Debugf(msgEnter)
 		defer log.Debugf(msgExit)
 
-		qpath, found := c.GetQuery("redirect")
-		log.Debugf("qpath: %s\nfound: %v", qpath, found)
-
-		s, err := base64.StdEncoding.DecodeString(qpath)
-		log.Debugf("s: %s\nerr: %v", s, err)
-
 		session := sessions.Default(c)
 		state := randToken(tokenLength)
 		session.Set(stateKey, state)
-		session.Set("redirect", qpath)
+		session.Set("redirect", getRedirectionPath(c))
 		session.Save()
 
 		c.Redirect(http.StatusSeeOther, getLoginURL(c, path, state))
@@ -62,6 +67,9 @@ func Logout(c *gin.Context) {
 }
 
 func randToken(length int) string {
+	log.Debugf(msgEnter)
+	defer log.Debugf(msgExit)
+
 	key := securecookie.GenerateRandomKey(length)
 	return base64.StdEncoding.EncodeToString(key)
 }
@@ -111,6 +119,9 @@ type Info struct {
 
 // Generates ID for User from ID obtained from OAuth OpenID Connect
 func GenOAuthID(s string) string {
+	log.Debugf(msgEnter)
+	defer log.Debugf(msgExit)
+
 	return uuid.NewV5(namespaceUUID, s).String()
 }
 
@@ -122,10 +133,16 @@ type OAuth struct {
 }
 
 func (o *OAuth) Load(ps []datastore.Property) error {
+	log.Debugf(msgEnter)
+	defer log.Debugf(msgExit)
+
 	return datastore.LoadStruct(o, ps)
 }
 
 func (o *OAuth) Save() ([]datastore.Property, error) {
+	log.Debugf(msgEnter)
+	defer log.Debugf(msgExit)
+
 	t := time.Now()
 	if o.CreatedAt.IsZero() {
 		o.CreatedAt = t
@@ -135,19 +152,31 @@ func (o *OAuth) Save() ([]datastore.Property, error) {
 }
 
 func (o *OAuth) LoadKey(k *datastore.Key) error {
+	log.Debugf(msgEnter)
+	defer log.Debugf(msgExit)
+
 	o.Key = k
 	return nil
 }
 
 func pk() *datastore.Key {
+	log.Debugf(msgEnter)
+	defer log.Debugf(msgExit)
+
 	return datastore.NameKey(oauthsKind, root, nil)
 }
 
 func NewKeyOAuth(id string) *datastore.Key {
+	log.Debugf(msgEnter)
+	defer log.Debugf(msgExit)
+
 	return datastore.NameKey(oauthKind, id, pk())
 }
 
 func NewOAuth(id string) OAuth {
+	log.Debugf(msgEnter)
+	defer log.Debugf(msgExit)
+
 	return OAuth{Key: NewKeyOAuth(id)}
 }
 
@@ -177,6 +206,7 @@ func (client Client) Auth(path string) gin.HandlerFunc {
 		oaid := GenOAuthID(uInfo.Sub)
 		oa, err := client.getOAuth(c, oaid)
 		log.Debugf("oa: %#v\nerr: %v", oa, err)
+		log.Debugf("redirectPath: %s", redirectPath)
 		// Succesfully pulled oauth id from datastore
 		if err == nil {
 			u := New(oa.ID)
@@ -269,6 +299,9 @@ func (client Client) As(c *gin.Context) {
 }
 
 func getUInfo(c *gin.Context, path string) (Info, error) {
+	log.Debugf(msgEnter)
+	defer log.Debugf(msgExit)
+
 	// Handle the exchange code to initiate a transport.
 	session := sessions.Default(c)
 	retrievedState, ok := session.Get(stateKey).(string)
@@ -304,12 +337,18 @@ func getUInfo(c *gin.Context, path string) (Info, error) {
 }
 
 func (client Client) getOAuth(c *gin.Context, id string) (OAuth, error) {
+	log.Debugf(msgEnter)
+	defer log.Debugf(msgExit)
+
 	u := NewOAuth(id)
 	err := client.DS.Get(c, u.Key, &u)
 	return u, err
 }
 
 func saveToSessionAndReturnTo(c *gin.Context, st *sessionToken, path string) {
+	log.Debugf(msgEnter)
+	defer log.Debugf(msgExit)
+
 	log.Debugf("st: %#v", st)
 	session := sessions.Default(c)
 	err := st.SaveTo(session)
@@ -376,6 +415,9 @@ type sessionToken struct {
 }
 
 func NewSessionToken(u *User, sub string, loaded bool) *sessionToken {
+	log.Debugf(msgEnter)
+	defer log.Debugf(msgEnter)
+
 	return &sessionToken{
 		Key:    u.Key,
 		Sub:    sub,
@@ -385,11 +427,20 @@ func NewSessionToken(u *User, sub string, loaded bool) *sessionToken {
 }
 
 func (st *sessionToken) SaveTo(s sessions.Session) error {
+	log.Debugf(msgEnter)
+	defer log.Debugf(msgEnter)
+
 	s.Set(sessionKey, st)
 	return s.Save()
 }
 
 func SessionTokenFrom(s sessions.Session) (*sessionToken, bool) {
-	token, ok := s.Get(sessionKey).(*sessionToken)
-	return token, ok
+	log.Debugf(msgEnter)
+	defer log.Debugf(msgExit)
+
+	log.Debugf("session %#v", s)
+	token := s.Get(sessionKey)
+	log.Debugf("token %#v", token)
+	token2, ok := s.Get(sessionKey).(*sessionToken)
+	return token2, ok
 }
