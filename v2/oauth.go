@@ -27,15 +27,11 @@ func init() {
 	gob.Register(new(sessionToken))
 }
 
-func getRedirectionPath(c *gin.Context) string {
+func getRedirectionPath(c *gin.Context) (string, bool) {
 	log.Debugf(msgEnter)
 	defer log.Debugf(msgExit)
 
-	qpath, found := c.GetQuery("redirect")
-	if found {
-		return qpath
-	}
-	return base64.StdEncoding.EncodeToString([]byte(c.Request.Header.Get("Referer")))
+	return c.GetQuery("redirect")
 }
 
 func Login(path string) gin.HandlerFunc {
@@ -46,6 +42,12 @@ func Login(path string) gin.HandlerFunc {
 		session := sessions.Default(c)
 		state := randToken(tokenLength)
 		session.Set(stateKey, state)
+
+		redirect, found := getRedirectionPath(c)
+		if !found {
+			redirect = base64.StdEncoding.EncodeToString([]byte(c.Request.Header.Get("Referer")))
+		}
+
 		session.Set("redirect", getRedirectionPath(c))
 		session.Save()
 
@@ -57,13 +59,17 @@ func Logout(c *gin.Context) {
 	log.Debugf(msgEnter)
 	defer log.Debugf(msgExit)
 
+	path, found := getRedirectionPath(c)
+	if !found {
+		path = homePath
+	}
 	s := sessions.Default(c)
 	s.Delete(sessionKey)
 	err := s.Save()
 	if err != nil {
 		log.Warningf("unable to save session: %v", err)
 	}
-	c.Redirect(http.StatusSeeOther, homePath)
+	c.Redirect(http.StatusSeeOther, path)
 }
 
 func randToken(length int) string {
