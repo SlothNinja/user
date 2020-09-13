@@ -48,7 +48,7 @@ func Login(path string) gin.HandlerFunc {
 			redirect = base64.StdEncoding.EncodeToString([]byte(c.Request.Header.Get("Referer")))
 		}
 
-		session.Set("redirect", getRedirectionPath(c))
+		session.Set("redirect", redirect)
 		session.Save()
 
 		c.Redirect(http.StatusSeeOther, getLoginURL(c, path, state))
