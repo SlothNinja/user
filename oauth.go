@@ -24,7 +24,7 @@ import (
 )
 
 func init() {
-	gob.Register(sessionToken{})
+	gob.Register(new(sessionToken))
 }
 
 const (
@@ -295,7 +295,11 @@ func (client Client) getOAuth(c *gin.Context, id string) (OAuth, error) {
 	return u, err
 }
 
-func saveToSessionAndReturnTo(c *gin.Context, st sessionToken, path string) {
+func saveToSessionAndReturnTo(c *gin.Context, st *sessionToken, path string) {
+	log.Debugf("Entering")
+	defer log.Debugf("Exiting")
+
+	log.Debugf("st: %#v", st)
 	session := sessions.Default(c)
 	err := st.SaveTo(session)
 	if err != nil {
@@ -340,25 +344,39 @@ func (client Client) getByID(c *gin.Context, id int64) (*User, error) {
 }
 
 type sessionToken struct {
+	Key    *datastore.Key
 	Sub    string
 	Loaded bool
-	*User
+	Data
 }
 
-func NewSessionToken(u *User, sub string, loaded bool) sessionToken {
-	return sessionToken{
+func NewSessionToken(u *User, sub string, loaded bool) *sessionToken {
+	log.Debugf("Entering")
+	defer log.Debugf("Exiting")
+
+	return &sessionToken{
+		Key:    u.Key,
 		Sub:    sub,
 		Loaded: loaded,
-		User:   u,
+		Data:   u.Data,
 	}
 }
 
-func (st sessionToken) SaveTo(s sessions.Session) error {
+func (st *sessionToken) SaveTo(s sessions.Session) error {
+	log.Debugf("Entering")
+	defer log.Debugf("Exiting")
+
 	s.Set(sessionKey, st)
 	return s.Save()
 }
 
-func SessionTokenFrom(s sessions.Session) (sessionToken, bool) {
-	token, ok := s.Get(sessionKey).(sessionToken)
-	return token, ok
+func SessionTokenFrom(s sessions.Session) (*sessionToken, bool) {
+	log.Debugf("Entering")
+	defer log.Debugf("Exiting")
+
+	log.Debugf("session %#v", s)
+	token := s.Get(sessionKey)
+	log.Debugf("token %#v", token)
+	token2, ok := s.Get(sessionKey).(*sessionToken)
+	return token2, ok
 }

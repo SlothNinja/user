@@ -261,22 +261,40 @@ func GetCUserHandler(client *datastore.Client) gin.HandlerFunc {
 			return
 		}
 
-		if token.Loaded {
-			u := New(c, token.ID())
-			u.Data = token.User.Data
-			WithCurrent(c, u)
-			return
-		}
-
-		u := New(c, token.ID())
-		err := client.Get(c, u.Key, u)
-		if err != nil {
-			log.Warningf(err.Error())
-			return
-		}
+		u := New(c, token.Key.ID)
+		u.Data = token.Data
 		WithCurrent(c, u)
 	}
 }
+
+// func GetCUserHandler(client *datastore.Client) gin.HandlerFunc {
+// 	return func(c *gin.Context) {
+// 		log.Debugf("Entering")
+// 		defer log.Debugf("Exiting")
+//
+// 		session := sessions.Default(c)
+// 		token, ok := SessionTokenFrom(session)
+// 		if !ok {
+// 			log.Warningf("missing token")
+// 			return
+// 		}
+//
+// 		if token.Loaded {
+// 			u := New(c, token.ID())
+// 			u.Data = token.User.Data
+// 			WithCurrent(c, u)
+// 			return
+// 		}
+//
+// 		u := New(c, token.ID())
+// 		err := client.Get(c, u.Key, u)
+// 		if err != nil {
+// 			log.Warningf(err.Error())
+// 			return
+// 		}
+// 		WithCurrent(c, u)
+// 	}
+// }
 
 func RequireCurrentUser() gin.HandlerFunc {
 	return func(c *gin.Context) {
