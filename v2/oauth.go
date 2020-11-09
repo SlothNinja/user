@@ -233,11 +233,18 @@ func (client Client) Auth(path string) gin.HandlerFunc {
 			if u.EmailHash == "" {
 				hash, err := emailHash(u.Email)
 				if err != nil {
-					log.Errorf("unable to get user for %#v", uInfo)
+					log.Errorf("email hash error for %#v", uInfo)
 					c.Redirect(http.StatusSeeOther, homePath)
 					return
 				}
 				u.EmailHash = hash
+
+				_, err = client.DS.Put(c, u.Key, u)
+				if err != nil {
+					log.Errorf(err.Error())
+					c.Redirect(http.StatusSeeOther, homePath)
+					return
+				}
 			}
 
 			st := NewSessionToken(u, uInfo.Sub, true)

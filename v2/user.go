@@ -45,6 +45,8 @@ type Data struct {
 	EmailHash          string    `json:"emailHash"`
 	EmailReminders     bool      `json:"emailReminders"`
 	EmailNotifications bool      `json:"emailNotifications"`
+	GoogleID           string    `json:"googleid"`
+	XMPPNotifications  bool      `json:"xmppnotifications"`
 	GravType           string    `json:"gravType"`
 	Admin              bool      `json:"admin"`
 	Joined             time.Time `json:"joined"`
