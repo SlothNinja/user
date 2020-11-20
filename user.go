@@ -29,10 +29,12 @@ type Data struct {
 	Name               string    `json:"name" form:"name"`
 	LCName             string    `json:"lcname"`
 	Email              string    `json:"email" form:"email"`
-	GoogleID           string    `json:"googleid"`
-	XMPPNotifications  bool      `json:"xmppnotifications"`
+	EmailHash          string    `json:"emailHash"`
 	EmailNotifications bool      `json:"emailnotifications" form:"emailNotifications"`
 	EmailReminders     bool      `json:"emailreminders"`
+	GoogleID           string    `json:"googleid"`
+	XMPPNotifications  bool      `json:"xmppnotifications"`
+	GravType           string    `json:"gravType"`
 	Admin              bool      `json:"admin"`
 	Joined             time.Time `json:"joined"`
 	CreatedAt          time.Time `json:"createdat"`
