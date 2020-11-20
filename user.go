@@ -136,8 +136,11 @@ func MCKey(c *gin.Context, gid string) string {
 }
 
 func IsAdmin(c *gin.Context) bool {
-	cu := CurrentFrom(c)
-	return cu != nil && cu.Admin
+	cu, err := CurrentFrom(c)
+	if err != nil {
+		return false
+	}
+	return cu.Admin
 }
 
 func (u *User) IsAdmin() bool {
@@ -298,7 +301,8 @@ func GetCUserHandler(client *datastore.Client) gin.HandlerFunc {
 
 func RequireCurrentUser() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if cu := CurrentFrom(c); cu == nil {
+		_, err := CurrentFrom(c)
+		if err != nil {
 			log.Warningf("RequireCurrentUser failed.")
 			c.Redirect(http.StatusSeeOther, "/")
 			c.Abort()
@@ -418,12 +422,34 @@ func From(c *gin.Context) *User {
 	return from(c, userKey)
 }
 
-func CurrentFrom(c *gin.Context) *User {
-	return from(c, currentKey)
+// func CurrentFrom(c *gin.Context) *User {
+// 	return from(c, currentKey)
+// }
+
+var dbgEnter = func() { log.Debugf("Entering") }
+var dbgExit = func() { log.Debugf("Exiting") }
+
+func CurrentFrom(c *gin.Context) (*User, error) {
+	dbgEnter()
+	defer dbgExit()
+
+	session := sessions.Default(c)
+	token, ok := SessionTokenFrom(session)
+	if !ok {
+		return nil, fmt.Errorf("missing token")
+	}
+
+	u := New(c, token.Key.ID)
+	u.Data = token.Data
+	return u, nil
 }
 
 func (u *User) IsCurrent(c *gin.Context) bool {
-	return u.Equal(CurrentFrom(c))
+	cu, err := CurrentFrom(c)
+	if err != nil {
+		return false
+	}
+	return u.Equal(cu)
 }
 
 func WithUser(c *gin.Context, u *User) {
