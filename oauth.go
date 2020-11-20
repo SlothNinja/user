@@ -176,7 +176,7 @@ func (client Client) Auth(path string) gin.HandlerFunc {
 		oa, err := client.getOAuth(c, oaid)
 		// Succesfully pulled oauth id from datastore
 		if err == nil {
-			u := New(c, oa.ID)
+			u := New(oa.ID)
 			err = client.Get(c, u.Key, u)
 			if err != nil {
 				log.Errorf(err.Error())
@@ -221,7 +221,7 @@ func (client Client) Auth(path string) gin.HandlerFunc {
 			return
 		}
 
-		u = New(c, 0)
+		u = New(0)
 		u.Name = strings.Split(uInfo.Email, "@")[0]
 		u.Email = uInfo.Email
 		st := NewSessionToken(u, uInfo.Sub, false)
@@ -241,7 +241,7 @@ func (client Client) As(c *gin.Context) {
 		return
 	}
 
-	u := New(c, uid)
+	u := New(uid)
 	err = client.Get(c, u.Key, u)
 	if err != nil {
 		log.Errorf(err.Error())
@@ -317,7 +317,7 @@ func (client Client) getByEmail(c *gin.Context, email string) (*User, error) {
 
 	email = strings.ToLower(strings.TrimSpace(email))
 	q := datastore.NewQuery(uKind).
-		Ancestor(RootKey(c)).
+		Ancestor(RootKey()).
 		Filter("Email=", email).
 		KeysOnly()
 
@@ -338,7 +338,7 @@ func (client Client) getByID(c *gin.Context, id int64) (*User, error) {
 	log.Debugf("Entering")
 	defer log.Debugf("Exiting")
 
-	u := New(c, id)
+	u := New(id)
 	err := client.Get(c, u.Key, u)
 	return u, err
 }

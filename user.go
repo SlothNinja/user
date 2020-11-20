@@ -20,7 +20,6 @@ import (
 )
 
 type User struct {
-	c   *gin.Context
 	Key *datastore.Key `datastore:"__key__"`
 	Data
 }
@@ -94,22 +93,17 @@ var (
 	ErrTooManyFound = errors.New("Found too many users.")
 )
 
-func (u *User) CTX() *gin.Context {
-	return u.c
-}
-
-func RootKey(c *gin.Context) *datastore.Key {
+func RootKey() *datastore.Key {
 	return datastore.NameKey("Users", "root", nil)
 }
 
-func NewKey(c *gin.Context, id int64) *datastore.Key {
-	return datastore.IDKey(kind, id, RootKey(c))
+func NewKey(id int64) *datastore.Key {
+	return datastore.IDKey(kind, id, RootKey())
 }
 
-func New(c *gin.Context, id int64) *User {
+func New(id int64) *User {
 	return &User{
-		c:   c,
-		Key: NewKey(c, id),
+		Key: NewKey(id),
 	}
 }
 
@@ -124,13 +118,13 @@ func GenID(gid string) string {
 	return fmt.Sprintf("%x", sha1.Sum([]byte(salt+gid)))
 }
 
-func NewKeyFor(c *gin.Context, id int64) *datastore.Key {
-	u := New(c, id)
+func NewKeyFor(id int64) *datastore.Key {
+	u := New(id)
 	return u.Key
 }
 
 func AllQuery(c *gin.Context) *datastore.Query {
-	return datastore.NewQuery(kind).Ancestor(RootKey(c))
+	return datastore.NewQuery(kind).Ancestor(RootKey())
 }
 
 func MCKey(c *gin.Context, gid string) string {
@@ -266,7 +260,7 @@ func GetCUserHandler(client *datastore.Client) gin.HandlerFunc {
 			return
 		}
 
-		u := New(c, token.Key.ID)
+		u := New(token.Key.ID)
 		u.Data = token.Data
 		WithCurrent(c, u)
 	}
@@ -335,7 +329,7 @@ func (client Client) Fetch(c *gin.Context) {
 		return
 	}
 
-	u := New(c, uid)
+	u := New(uid)
 	err = client.Get(c, u.Key, u)
 	if err != nil {
 		log.Errorf("Unable to get user for id: %v", c.Param("uid"))
@@ -392,7 +386,7 @@ func (client Client) getFiltered(c *gin.Context, start, length string) ([]*User,
 	for i := range ks {
 		id := ks[i].ID
 		if id != 0 {
-			us = append(us, New(c, id))
+			us = append(us, New(id))
 		}
 	}
 
@@ -441,7 +435,7 @@ func CurrentFrom(c *gin.Context) (*User, error) {
 		return nil, fmt.Errorf("missing token")
 	}
 
-	u := New(c, token.Key.ID)
+	u := New(token.Key.ID)
 	u.Data = token.Data
 	return u, nil
 }
