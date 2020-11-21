@@ -31,13 +31,21 @@ const (
 	HOST        = "HOST"
 	authPath    = "/auth"
 	sessionKey  = "session"
-	userNewPath = "/user/new"
+	userNewPath = "#/new"
 	tokenLength = 32
 	uKind       = "User"
 	oauthsKind  = "OAuths"
 	oauthKind   = "OAuth"
 	root        = "root"
+	stateKey    = "state"
 )
+
+func getRedirectionPath(c *gin.Context) (string, bool) {
+	log.Debugf("Entering")
+	defer log.Debugf("Exiting")
+
+	return c.GetQuery("redirect")
+}
 
 func Login(path string) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -46,7 +54,16 @@ func Login(path string) gin.HandlerFunc {
 
 		session := sessions.Default(c)
 		state := randToken(tokenLength)
-		session.Set("state", state)
+		session.Set(stateKey, state)
+
+		redirect, found := getRedirectionPath(c)
+		log.Debugf("redirect: %v", redirect)
+		if !found {
+			redirect = base64.StdEncoding.EncodeToString([]byte(c.Request.Header.Get("Referer")))
+		}
+
+		log.Debugf("redirect: %v", redirect)
+		session.Set("redirect", redirect)
 		session.Save()
 
 		c.Redirect(http.StatusSeeOther, getLoginURL(c, path, state))
@@ -62,6 +79,16 @@ func Logout(c *gin.Context) {
 	err := s.Save()
 	if err != nil {
 		log.Warningf("unable to save session: %v", err)
+	}
+
+	path, found := getRedirectionPath(c)
+	if found {
+		bs, err := base64.StdEncoding.DecodeString(path)
+		if err == nil {
+			c.Redirect(http.StatusSeeOther, string(bs))
+			return
+		}
+		log.Warningf("unable to decode path: %v", err)
 	}
 	c.Redirect(http.StatusSeeOther, homePath)
 }
@@ -84,12 +111,17 @@ func oauth2Config(c *gin.Context, path string, scopes ...string) *oauth2.Config 
 	log.Debugf("Entering")
 	defer log.Debugf("Exiting")
 
+	log.Debugf("getHost: %s", getHost())
+	log.Debugf("path: %s", path)
+	redirectURL := fmt.Sprintf("%s/%s", getHost(), strings.TrimPrefix(path, "/"))
+	log.Debugf("redirectURL: %s", redirectURL)
+
 	return &oauth2.Config{
 		ClientID:     os.Getenv("CLIENT_ID"),
 		ClientSecret: os.Getenv("CLIENT_SECRET"),
 		Endpoint:     google.Endpoint,
 		Scopes:       scopes,
-		RedirectURL:  fmt.Sprintf("%s%s", getHost(), path),
+		RedirectURL:  redirectURL,
 	}
 }
 
@@ -165,6 +197,7 @@ func (client Client) Auth(path string) gin.HandlerFunc {
 		log.Debugf("Entering")
 		defer log.Debugf("Exiting")
 
+		log.Debugf("path: %s", path)
 		uInfo, err := getUInfo(c, path)
 		if err != nil {
 			log.Errorf(err.Error())
@@ -177,7 +210,7 @@ func (client Client) Auth(path string) gin.HandlerFunc {
 		// Succesfully pulled oauth id from datastore
 		if err == nil {
 			u := New(oa.ID)
-			err = client.Get(c, u.Key, u)
+			err = client.DS.Get(c, u.Key, u)
 			if err != nil {
 				log.Errorf(err.Error())
 				c.AbortWithStatus(http.StatusInternalServerError)
@@ -242,7 +275,7 @@ func (client Client) As(c *gin.Context) {
 	}
 
 	u := New(uid)
-	err = client.Get(c, u.Key, u)
+	err = client.DS.Get(c, u.Key, u)
 	if err != nil {
 		log.Errorf(err.Error())
 		c.AbortWithStatus(http.StatusInternalServerError)
@@ -291,7 +324,7 @@ func getUInfo(c *gin.Context, path string) (Info, error) {
 
 func (client Client) getOAuth(c *gin.Context, id string) (OAuth, error) {
 	u := NewOAuth(id)
-	err := client.Get(c, u.Key, &u)
+	err := client.DS.Get(c, u.Key, &u)
 	return u, err
 }
 
@@ -321,7 +354,7 @@ func (client Client) getByEmail(c *gin.Context, email string) (*User, error) {
 		Filter("Email=", email).
 		KeysOnly()
 
-	ks, err := client.GetAll(c, q, nil)
+	ks, err := client.DS.GetAll(c, q, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -339,14 +372,13 @@ func (client Client) getByID(c *gin.Context, id int64) (*User, error) {
 	defer log.Debugf("Exiting")
 
 	u := New(id)
-	err := client.Get(c, u.Key, u)
+	err := client.DS.Get(c, u.Key, u)
 	return u, err
 }
 
 type sessionToken struct {
-	Key    *datastore.Key
-	Sub    string
-	Loaded bool
+	Key *datastore.Key
+	Sub string
 	Data
 }
 
@@ -355,10 +387,9 @@ func NewSessionToken(u *User, sub string, loaded bool) *sessionToken {
 	defer log.Debugf("Exiting")
 
 	return &sessionToken{
-		Key:    u.Key,
-		Sub:    sub,
-		Loaded: loaded,
-		Data:   u.Data,
+		Key:  u.Key,
+		Sub:  sub,
+		Data: u.Data,
 	}
 }
 

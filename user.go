@@ -3,6 +3,7 @@ package user
 import (
 	"crypto/md5"
 	"crypto/sha1"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"html/template"
@@ -25,12 +26,12 @@ type User struct {
 }
 
 type Data struct {
-	Name               string    `json:"name" form:"name"`
+	Name               string    `json:"name"`
 	LCName             string    `json:"lcname"`
-	Email              string    `json:"email" form:"email"`
+	Email              string    `json:"email"`
 	EmailHash          string    `json:"emailHash"`
-	EmailNotifications bool      `json:"emailnotifications" form:"emailNotifications"`
-	EmailReminders     bool      `json:"emailreminders"`
+	EmailNotifications bool      `json:"emailNotifications"`
+	EmailReminders     bool      `json:"emailReminders"`
 	GoogleID           string    `json:"googleid"`
 	XMPPNotifications  bool      `json:"xmppnotifications"`
 	GravType           string    `json:"gravType"`
@@ -41,11 +42,11 @@ type Data struct {
 }
 
 type Client struct {
-	*datastore.Client
+	DS *datastore.Client
 }
 
 func NewClient(dsClient *datastore.Client) Client {
-	return Client{dsClient}
+	return Client{DS: dsClient}
 }
 
 func (u *User) Load(ps []datastore.Property) error {
@@ -79,6 +80,8 @@ const (
 	homePath         = "/"
 	salt             = "slothninja"
 	usersKey         = "Users"
+	msgEnter         = "Entering"
+	msgExit          = "Exiting"
 	NotFound   int64 = -1
 )
 
@@ -165,29 +168,40 @@ func GravatarURL(email string, options ...string) string {
 }
 
 func (client Client) Update(c *gin.Context, u *User) error {
-	obj := struct {
-		Name               string `form:"name"`
-		Email              string `form:"email"`
-		EmailNotifications bool   `form:"emailNotifications"`
-	}{}
+	log.Debugf(msgEnter)
+	defer log.Debugf(msgExit)
 
-	err := c.ShouldBind(&obj)
+	cu, err := CurrentFrom(c)
 	if err != nil {
 		return err
 	}
 
-	if IsAdmin(c) {
-		if obj.Email != "" {
-			u.Email = obj.Email
-		}
+	obj := New(0)
+	err = c.ShouldBind(obj)
+	if err != nil {
+		return err
 	}
 
-	if u.IsAdminOrCurrent(c) {
+	log.Debugf("obj: %#v", obj)
+
+	if cu.Admin {
+		log.Debugf("is admin")
+		if obj.Email != "" {
+			log.Debugf("updating email")
+			u.Email = obj.Email
+		}
+
 		err = client.updateName(c, u, obj.Name)
 		if err != nil {
 			return err
 		}
+	}
+
+	if cu.Admin || (cu.ID() == u.ID()) {
+		log.Debugf("is admin or current")
+		log.Debugf("updating emailNotifications and gravType")
 		u.EmailNotifications = obj.EmailNotifications
+		u.GravType = obj.GravType
 	}
 
 	return nil
@@ -222,7 +236,7 @@ func (client Client) NameIsUnique(c *gin.Context, name string) (bool, error) {
 
 	q := datastore.NewQuery("User").Filter("LCName=", LCName)
 
-	cnt, err := client.Count(c, q)
+	cnt, err := client.DS.Count(c, q)
 	if err != nil {
 		return false, err
 	}
@@ -250,8 +264,8 @@ func PathFor(uid int64) template.HTML {
 
 func GetCUserHandler(client *datastore.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		log.Debugf("Entering")
-		defer log.Debugf("Exiting")
+		log.Debugf(msgEnter)
+		defer log.Debugf(msgExit)
 
 		session := sessions.Default(c)
 		token, ok := SessionTokenFrom(session)
@@ -307,8 +321,8 @@ func RequireCurrentUser() gin.HandlerFunc {
 }
 
 func RequireAdmin(c *gin.Context) {
-	log.Debugf("Entering")
-	defer log.Debugf("Exiting")
+	log.Debugf(msgEnter)
+	defer log.Debugf(msgExit)
 
 	if !IsAdmin(c) {
 		log.Warningf("user not admin.")
@@ -318,10 +332,10 @@ func RequireAdmin(c *gin.Context) {
 }
 
 func (client Client) Fetch(c *gin.Context) {
-	log.Debugf("Entering")
-	defer log.Debugf("Exiting")
+	log.Debugf(msgEnter)
+	defer log.Debugf(msgExit)
 
-	uid, err := getUID(c)
+	uid, err := getUID(c, uidParam)
 	if err != nil || uid == NotFound {
 		log.Errorf(err.Error())
 		c.Redirect(http.StatusSeeOther, "/")
@@ -330,7 +344,7 @@ func (client Client) Fetch(c *gin.Context) {
 	}
 
 	u := New(uid)
-	err = client.Get(c, u.Key, u)
+	err = client.DS.Get(c, u.Key, u)
 	if err != nil {
 		log.Errorf("Unable to get user for id: %v", c.Param("uid"))
 		c.Redirect(http.StatusSeeOther, "/")
@@ -341,8 +355,8 @@ func (client Client) Fetch(c *gin.Context) {
 }
 
 func (client Client) FetchAll(c *gin.Context) {
-	log.Debugf("Entering")
-	defer log.Debugf("Exiting")
+	log.Debugf(msgEnter)
+	defer log.Debugf(msgExit)
 
 	us, cnt, err := client.getFiltered(c, c.PostForm("start"), c.PostForm("length"))
 
@@ -355,11 +369,11 @@ func (client Client) FetchAll(c *gin.Context) {
 }
 
 func (client Client) getFiltered(c *gin.Context, start, length string) ([]*User, int64, error) {
-	log.Debugf("Entering")
-	defer log.Debugf("Exiting")
+	log.Debugf(msgEnter)
+	defer log.Debugf(msgExit)
 
 	q := AllQuery(c).KeysOnly()
-	icnt, err := client.Count(c, q)
+	icnt, err := client.DS.Count(c, q)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -377,7 +391,7 @@ func (client Client) getFiltered(c *gin.Context, start, length string) ([]*User,
 		}
 	}
 
-	ks, err := client.GetAll(c, q, nil)
+	ks, err := client.DS.GetAll(c, q, nil)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -390,15 +404,16 @@ func (client Client) getFiltered(c *gin.Context, start, length string) ([]*User,
 		}
 	}
 
-	err = client.GetMulti(c, ks, us)
+	err = client.DS.GetMulti(c, ks, us)
 	return us, cnt, err
 }
 
-func getUID(c *gin.Context) (id int64, err error) {
-	if id, err = strconv.ParseInt(c.Param(uidParam), 10, 64); err != nil {
-		id = NotFound
+func getUID(c *gin.Context, param string) (int64, error) {
+	id, err := strconv.ParseInt(c.Param(param), 10, 64)
+	if err != nil {
+		return NotFound, err
 	}
-	return
+	return id, nil
 }
 
 func Fetched(c *gin.Context) *User {
@@ -418,26 +433,34 @@ func From(c *gin.Context) *User {
 	return from(c, userKey)
 }
 
-// func CurrentFrom(c *gin.Context) *User {
-// 	return from(c, currentKey)
-// }
-
-var dbgEnter = func() { log.Debugf("Entering") }
-var dbgExit = func() { log.Debugf("Exiting") }
+var ErrMissingToken = fmt.Errorf("missing token")
 
 func CurrentFrom(c *gin.Context) (*User, error) {
-	dbgEnter()
-	defer dbgExit()
+	log.Debugf(msgEnter)
+	defer log.Debugf(msgExit)
 
 	session := sessions.Default(c)
 	token, ok := SessionTokenFrom(session)
 	if !ok {
-		return nil, fmt.Errorf("missing token")
+		return nil, ErrMissingToken
 	}
 
 	u := New(token.Key.ID)
 	u.Data = token.Data
 	return u, nil
+}
+
+func (client Client) Current(c *gin.Context) (*User, error) {
+	log.Debugf(msgEnter)
+	defer log.Debugf(msgExit)
+
+	u, err := CurrentFrom(c)
+	if err != nil {
+		return nil, err
+	}
+
+	err = client.DS.Get(c, u.Key, u)
+	return u, err
 }
 
 func (u *User) IsCurrent(c *gin.Context) bool {
@@ -473,4 +496,36 @@ func withCount(c *gin.Context, cnt int64) *gin.Context {
 func CountFrom(c *gin.Context) (cnt int64) {
 	cnt, _ = c.Value(countKey).(int64)
 	return
+}
+
+func (u User) MarshalJSON() ([]byte, error) {
+	type usr User
+	return json.Marshal(struct {
+		usr
+		ID int64 `json:"id"`
+	}{
+		usr: usr(u),
+		ID:  u.ID(),
+	})
+}
+
+func (client Client) ByParam(c *gin.Context, param string) (*User, error) {
+	log.Debugf(msgEnter)
+	defer log.Debugf(msgExit)
+
+	uid, err := getUID(c, param)
+	if err != nil {
+		return nil, err
+	}
+
+	return client.Get(c, uid)
+}
+
+func (client Client) Get(c *gin.Context, id int64) (*User, error) {
+	log.Debugf(msgEnter)
+	defer log.Debugf(msgExit)
+
+	u := New(id)
+	err := client.DS.Get(c, u.Key, u)
+	return u, err
 }
