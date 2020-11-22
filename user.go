@@ -41,6 +41,16 @@ type Data struct {
 	UpdatedAt          time.Time `json:"updatedat"`
 }
 
+func EmailHash(email string) (string, error) {
+	email = strings.ToLower(strings.TrimSpace(email))
+	hash := md5.New()
+	_, err := hash.Write([]byte(email))
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%x", hash.Sum(nil)), nil
+}
+
 type Client struct {
 	DS *datastore.Client
 }
@@ -58,10 +68,12 @@ func (u *User) Save() ([]datastore.Property, error) {
 	if u.CreatedAt.IsZero() {
 		u.CreatedAt = t
 	}
+
 	if u.Joined.IsZero() {
 		u.Joined = t
 	}
 	u.UpdatedAt = t
+
 	return datastore.SaveStruct(u)
 }
 
@@ -150,21 +162,16 @@ func (u *User) IsAdminOrCurrent(c *gin.Context) bool {
 	return IsAdmin(c) || u.IsCurrent(c)
 }
 
-func (u *User) Gravatar(options ...string) template.URL {
-	return template.URL(GravatarURL(u.Email, options...))
+func (u *User) Gravatar(size string) template.URL {
+	return template.URL(GravatarURL(u.Email, size, u.GravType))
 }
 
-func GravatarURL(email string, options ...string) string {
-	size := "80"
-	if len(options) == 1 {
-		size = options[0]
-	}
-
+func GravatarURL(email, size, gravType string) string {
 	email = strings.ToLower(strings.TrimSpace(email))
 	hash := md5.New()
 	hash.Write([]byte(email))
 	md5string := fmt.Sprintf("%x", hash.Sum(nil))
-	return fmt.Sprintf("https://www.gravatar.com/avatar/%s?s=%s&d=monsterid", md5string, size)
+	return fmt.Sprintf("https://www.gravatar.com/avatar/%s?s=%s&d=%s", md5string, size, gravType)
 }
 
 func (client Client) Update(c *gin.Context, u *User) error {
@@ -189,6 +196,12 @@ func (client Client) Update(c *gin.Context, u *User) error {
 		if obj.Email != "" {
 			log.Debugf("updating email")
 			u.Email = obj.Email
+
+			hash, err := EmailHash(u.Email)
+			if err != nil {
+				return err
+			}
+			u.EmailHash = hash
 		}
 
 		err = client.updateName(c, u, obj.Name)
@@ -200,8 +213,14 @@ func (client Client) Update(c *gin.Context, u *User) error {
 	if cu.Admin || (cu.ID() == u.ID()) {
 		log.Debugf("is admin or current")
 		log.Debugf("updating emailNotifications and gravType")
+		u.EmailReminders = obj.EmailReminders
 		u.EmailNotifications = obj.EmailNotifications
 		u.GravType = obj.GravType
+		hash, err := EmailHash(u.Email)
+		if err != nil {
+			return err
+		}
+		u.EmailHash = hash
 	}
 
 	return nil
@@ -259,7 +278,7 @@ func LinkFor(uid int64, name string) template.HTML {
 }
 
 func PathFor(uid int64) template.HTML {
-	return template.HTML(fmt.Sprintf("/user/show/%d", uid))
+	return template.HTML(fmt.Sprintf("http://luser.slothninja.com:8087/#/show/%d", uid))
 }
 
 func GetCUserHandler(client *datastore.Client) gin.HandlerFunc {
@@ -420,8 +439,8 @@ func Fetched(c *gin.Context) *User {
 	return From(c)
 }
 
-func Gravatar(u *User) template.HTML {
-	return template.HTML(fmt.Sprintf(`<a href="/user/show/%d"><img src=%q alt="Gravatar" class="black-border" /></a>`, u.ID, u.Gravatar()))
+func Gravatar(u *User, size string) template.HTML {
+	return template.HTML(fmt.Sprintf(`<a href=%q ><img src=%q alt="Gravatar" class="black-border" /></a>`, PathFor(u.ID()), u.Gravatar(size)))
 }
 
 func from(c *gin.Context, key string) (u *User) {

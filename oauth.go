@@ -41,16 +41,16 @@ const (
 )
 
 func getRedirectionPath(c *gin.Context) (string, bool) {
-	log.Debugf("Entering")
-	defer log.Debugf("Exiting")
+	log.Debugf(msgEnter)
+	defer log.Debugf(msgExit)
 
 	return c.GetQuery("redirect")
 }
 
 func Login(path string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		log.Debugf("Entering")
-		defer log.Debugf("Exiting")
+		log.Debugf(msgEnter)
+		defer log.Debugf(msgExit)
 
 		session := sessions.Default(c)
 		state := randToken(tokenLength)
@@ -61,6 +61,11 @@ func Login(path string) gin.HandlerFunc {
 		if !found {
 			redirect = base64.StdEncoding.EncodeToString([]byte(c.Request.Header.Get("Referer")))
 		}
+		decoded, err := base64.StdEncoding.DecodeString(redirect)
+		if err != nil {
+			log.Warningf("error: %v", err.Error())
+		}
+		log.Debugf("decoded: %s", decoded)
 
 		log.Debugf("redirect: %v", redirect)
 		session.Set("redirect", redirect)
@@ -71,8 +76,8 @@ func Login(path string) gin.HandlerFunc {
 }
 
 func Logout(c *gin.Context) {
-	log.Debugf("Entering")
-	defer log.Debugf("Exiting")
+	log.Debugf(msgEnter)
+	defer log.Debugf(msgExit)
 
 	s := sessions.Default(c)
 	s.Delete(sessionKey)
@@ -99,8 +104,8 @@ func randToken(length int) string {
 }
 
 func getLoginURL(c *gin.Context, path, state string) string {
-	log.Debugf("Entering")
-	defer log.Debugf("Exiting")
+	log.Debugf(msgEnter)
+	defer log.Debugf(msgExit)
 
 	// State can be some kind of random generated hash string.
 	// See relevant RFC: http://tools.ietf.org/html/rfc6749#section-10.12
@@ -108,8 +113,8 @@ func getLoginURL(c *gin.Context, path, state string) string {
 }
 
 func oauth2Config(c *gin.Context, path string, scopes ...string) *oauth2.Config {
-	log.Debugf("Entering")
-	defer log.Debugf("Exiting")
+	log.Debugf(msgEnter)
+	defer log.Debugf(msgExit)
 
 	log.Debugf("getHost: %s", getHost())
 	log.Debugf("path: %s", path)
@@ -194,16 +199,26 @@ func NewOAuth(id string) OAuth {
 
 func (client Client) Auth(path string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		log.Debugf("Entering")
-		defer log.Debugf("Exiting")
+		log.Debugf(msgEnter)
+		defer log.Debugf(msgExit)
 
-		log.Debugf("path: %s", path)
 		uInfo, err := getUInfo(c, path)
 		if err != nil {
 			log.Errorf(err.Error())
 			c.AbortWithStatus(http.StatusInternalServerError)
 			return
 		}
+
+		session := sessions.Default(c)
+		retrievedPath, ok := session.Get("redirect").(string)
+		var redirectPath string
+		if ok {
+			bs, err := base64.StdEncoding.DecodeString(retrievedPath)
+			if err == nil {
+				redirectPath = string(bs)
+			}
+		}
+		log.Debugf("redirectPath: %s", redirectPath)
 
 		oaid := GenOAuthID(uInfo.Sub)
 		oa, err := client.getOAuth(c, oaid)
@@ -218,7 +233,7 @@ func (client Client) Auth(path string) gin.HandlerFunc {
 			}
 
 			st := NewSessionToken(u, uInfo.Sub, true)
-			saveToSessionAndReturnTo(c, st, homePath)
+			saveToSessionAndReturnTo(c, st, redirectPath)
 			return
 		}
 
@@ -250,7 +265,7 @@ func (client Client) Auth(path string) gin.HandlerFunc {
 				return
 			}
 			st := NewSessionToken(u, uInfo.Sub, true)
-			saveToSessionAndReturnTo(c, st, homePath)
+			saveToSessionAndReturnTo(c, st, redirectPath)
 			return
 		}
 
@@ -264,8 +279,8 @@ func (client Client) Auth(path string) gin.HandlerFunc {
 }
 
 func (client Client) As(c *gin.Context) {
-	log.Debugf("Entering")
-	defer log.Debugf("Exiting")
+	log.Debugf(msgEnter)
+	defer log.Debugf(msgExit)
 
 	uid, err := strconv.ParseInt(c.Param("uid"), 10, 64)
 	if err != nil {
@@ -329,8 +344,8 @@ func (client Client) getOAuth(c *gin.Context, id string) (OAuth, error) {
 }
 
 func saveToSessionAndReturnTo(c *gin.Context, st *sessionToken, path string) {
-	log.Debugf("Entering")
-	defer log.Debugf("Exiting")
+	log.Debugf(msgEnter)
+	defer log.Debugf(msgExit)
 
 	log.Debugf("st: %#v", st)
 	session := sessions.Default(c)
@@ -345,8 +360,8 @@ func saveToSessionAndReturnTo(c *gin.Context, st *sessionToken, path string) {
 }
 
 func (client Client) getByEmail(c *gin.Context, email string) (*User, error) {
-	log.Debugf("Entering")
-	defer log.Debugf("Exiting")
+	log.Debugf(msgEnter)
+	defer log.Debugf(msgExit)
 
 	email = strings.ToLower(strings.TrimSpace(email))
 	q := datastore.NewQuery(uKind).
@@ -368,8 +383,8 @@ func (client Client) getByEmail(c *gin.Context, email string) (*User, error) {
 }
 
 func (client Client) getByID(c *gin.Context, id int64) (*User, error) {
-	log.Debugf("Entering")
-	defer log.Debugf("Exiting")
+	log.Debugf(msgEnter)
+	defer log.Debugf(msgExit)
 
 	u := New(id)
 	err := client.DS.Get(c, u.Key, u)
@@ -383,8 +398,8 @@ type sessionToken struct {
 }
 
 func NewSessionToken(u *User, sub string, loaded bool) *sessionToken {
-	log.Debugf("Entering")
-	defer log.Debugf("Exiting")
+	log.Debugf(msgEnter)
+	defer log.Debugf(msgExit)
 
 	return &sessionToken{
 		Key:  u.Key,
@@ -394,16 +409,16 @@ func NewSessionToken(u *User, sub string, loaded bool) *sessionToken {
 }
 
 func (st *sessionToken) SaveTo(s sessions.Session) error {
-	log.Debugf("Entering")
-	defer log.Debugf("Exiting")
+	log.Debugf(msgEnter)
+	defer log.Debugf(msgExit)
 
 	s.Set(sessionKey, st)
 	return s.Save()
 }
 
 func SessionTokenFrom(s sessions.Session) (*sessionToken, bool) {
-	log.Debugf("Entering")
-	defer log.Debugf("Exiting")
+	log.Debugf(msgEnter)
+	defer log.Debugf(msgExit)
 
 	log.Debugf("session %#v", s)
 	token := s.Get(sessionKey)
