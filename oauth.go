@@ -121,13 +121,20 @@ func oauth2Config(c *gin.Context, path string, scopes ...string) *oauth2.Config 
 	redirectURL := fmt.Sprintf("%s/%s", getHost(), strings.TrimPrefix(path, "/"))
 	log.Debugf("redirectURL: %s", redirectURL)
 
-	return &oauth2.Config{
-		ClientID:     os.Getenv("CLIENT_ID"),
-		ClientSecret: os.Getenv("CLIENT_SECRET"),
-		Endpoint:     google.Endpoint,
-		Scopes:       scopes,
-		RedirectURL:  redirectURL,
+	conf := &oauth2.Config{
+		Endpoint:    google.Endpoint,
+		Scopes:      scopes,
+		RedirectURL: redirectURL,
 	}
+	clientID := os.Getenv("CLIENT_ID")
+	if clientID != "" {
+		conf.ClientID = clientID
+	}
+	clientSecret := os.Getenv("CLIENT_SECRET")
+	if clientSecret != "" {
+		conf.ClientSecret = clientSecret
+	}
+	return conf
 }
 
 func scopes() []string {
