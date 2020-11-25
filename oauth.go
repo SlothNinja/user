@@ -121,20 +121,13 @@ func oauth2Config(c *gin.Context, path string, scopes ...string) *oauth2.Config 
 	redirectURL := fmt.Sprintf("%s/%s", getHost(), strings.TrimPrefix(path, "/"))
 	log.Debugf("redirectURL: %s", redirectURL)
 
-	conf := &oauth2.Config{
-		Endpoint:    google.Endpoint,
-		Scopes:      scopes,
-		RedirectURL: redirectURL,
+	return &oauth2.Config{
+		ClientID:     os.Getenv("CLIENT_ID"),
+		ClientSecret: os.Getenv("CLIENT_SECRET"),
+		Endpoint:     google.Endpoint,
+		Scopes:       scopes,
+		RedirectURL:  redirectURL,
 	}
-	clientID := os.Getenv("CLIENT_ID")
-	if clientID != "" {
-		conf.ClientID = clientID
-	}
-	clientSecret := os.Getenv("CLIENT_SECRET")
-	if clientSecret != "" {
-		conf.ClientSecret = clientSecret
-	}
-	return conf
 }
 
 func scopes() []string {
@@ -320,7 +313,7 @@ func getUInfo(c *gin.Context, path string) (Info, error) {
 	conf := oauth2Config(c, path, scopes()...)
 	tok, err := conf.Exchange(c, c.Query("code"))
 	if err != nil {
-		return Info{}, fmt.Errorf("tok error: %#v", err)
+		return Info{}, fmt.Errorf("tok error: %s", err.Error())
 	}
 
 	client := conf.Client(c, tok)
