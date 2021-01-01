@@ -29,6 +29,7 @@ func init() {
 
 const (
 	HOST        = "HOST"
+	LOGIN_HOST  = "LOGIN_HOST"
 	authPath    = "/auth"
 	sessionKey  = "session"
 	userNewPath = "#/new"
@@ -127,6 +128,14 @@ func scopes() []string {
 
 func getHost() string {
 	return os.Getenv(HOST)
+}
+
+func getLoginHost() string {
+	s := os.Getenv(LOGIN_HOST)
+	if s != "" {
+		return s
+	}
+	return getHost()
 }
 
 type Info struct {
