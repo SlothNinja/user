@@ -257,7 +257,7 @@ func LinkFor(uid int64, name string) template.HTML {
 }
 
 func PathFor(uid int64) template.HTML {
-	return template.HTML(fmt.Sprintf("http://luser.slothninja.com:8087/#/show/%d", uid))
+	return template.HTML(fmt.Sprintf("%s/#/show/%d", getHost(), uid))
 }
 
 // func GetCUserHandler(client *datastore.Client) gin.HandlerFunc {
