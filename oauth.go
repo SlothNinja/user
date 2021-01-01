@@ -38,6 +38,9 @@ const (
 	oauthKind   = "OAuth"
 	root        = "root"
 	stateKey    = "state"
+	emailKey    = "email"
+	nameKey     = "name"
+	redirectKey = "redirect"
 )
 
 func getRedirectionPath(c *gin.Context) (string, bool) {
@@ -57,18 +60,10 @@ func Login(path string) gin.HandlerFunc {
 		session.Set(stateKey, state)
 
 		redirect, found := getRedirectionPath(c)
-		log.Debugf("redirect: %v", redirect)
 		if !found {
 			redirect = base64.StdEncoding.EncodeToString([]byte(c.Request.Header.Get("Referer")))
 		}
-		decoded, err := base64.StdEncoding.DecodeString(redirect)
-		if err != nil {
-			log.Warningf("error: %v", err.Error())
-		}
-		log.Debugf("decoded: %s", decoded)
-
-		log.Debugf("redirect: %v", redirect)
-		session.Set("redirect", redirect)
+		session.Set(redirectKey, redirect)
 		session.Save()
 
 		c.Redirect(http.StatusSeeOther, getLoginURL(c, path, state))
@@ -116,11 +111,7 @@ func oauth2Config(c *gin.Context, path string, scopes ...string) *oauth2.Config 
 	log.Debugf(msgEnter)
 	defer log.Debugf(msgExit)
 
-	log.Debugf("getHost: %s", getHost())
-	log.Debugf("path: %s", path)
 	redirectURL := fmt.Sprintf("%s/%s", getHost(), strings.TrimPrefix(path, "/"))
-	log.Debugf("redirectURL: %s", redirectURL)
-
 	return &oauth2.Config{
 		ClientID:     os.Getenv("CLIENT_ID"),
 		ClientSecret: os.Getenv("CLIENT_SECRET"),
@@ -189,12 +180,12 @@ func pk() *datastore.Key {
 	return datastore.NameKey(oauthsKind, root, nil)
 }
 
-func NewKeyOAuth(id string) *datastore.Key {
+func NewOAuthKey(id string) *datastore.Key {
 	return datastore.NameKey(oauthKind, id, pk())
 }
 
 func NewOAuth(id string) OAuth {
-	return OAuth{Key: NewKeyOAuth(id)}
+	return OAuth{Key: NewOAuthKey(id)}
 }
 
 func (client Client) Auth(path string) gin.HandlerFunc {
@@ -210,7 +201,7 @@ func (client Client) Auth(path string) gin.HandlerFunc {
 		}
 
 		session := sessions.Default(c)
-		retrievedPath, ok := session.Get("redirect").(string)
+		retrievedPath, ok := session.Get(redirectKey).(string)
 		var redirectPath string
 		if ok {
 			bs, err := base64.StdEncoding.DecodeString(retrievedPath)
@@ -218,21 +209,19 @@ func (client Client) Auth(path string) gin.HandlerFunc {
 				redirectPath = string(bs)
 			}
 		}
-		log.Debugf("redirectPath: %s", redirectPath)
 
 		oaid := GenOAuthID(uInfo.Sub)
 		oa, err := client.getOAuth(c, oaid)
 		// Succesfully pulled oauth id from datastore
 		if err == nil {
-			u := New(oa.ID)
-			err = client.DS.Get(c, u.Key, u)
+			u, err := client.Get(c, oa.ID)
 			if err != nil {
 				log.Errorf(err.Error())
 				c.AbortWithStatus(http.StatusInternalServerError)
 				return
 			}
 
-			st := NewSessionToken(u, uInfo.Sub, true)
+			st := NewSessionToken(u.ID(), uInfo.Sub)
 			saveToSessionAndReturnTo(c, st, redirectPath)
 			return
 		}
@@ -264,7 +253,7 @@ func (client Client) Auth(path string) gin.HandlerFunc {
 				c.AbortWithStatus(http.StatusBadRequest)
 				return
 			}
-			st := NewSessionToken(u, uInfo.Sub, true)
+			st := NewSessionToken(u.ID(), uInfo.Sub)
 			saveToSessionAndReturnTo(c, st, redirectPath)
 			return
 		}
@@ -272,15 +261,35 @@ func (client Client) Auth(path string) gin.HandlerFunc {
 		u = New(0)
 		u.Name = strings.Split(uInfo.Email, "@")[0]
 		u.Email = uInfo.Email
-		st := NewSessionToken(u, uInfo.Sub, false)
-		saveToSessionAndReturnTo(c, st, userNewPath)
-		return
+		session.Set(nameKey, u.Name)
+		session.Set(emailKey, u.Email)
+		saveToSessionAndReturnTo(c, NewSessionToken(u.ID(), uInfo.Sub), userNewPath)
 	}
+}
+
+func isAdmin(u *User) bool {
+	if u == nil {
+		return false
+	}
+	return u.Admin
 }
 
 func (client Client) As(c *gin.Context) {
 	log.Debugf(msgEnter)
 	defer log.Debugf(msgExit)
+
+	cu, err := client.Current(c)
+	if err != nil {
+		log.Errorf(err.Error())
+		c.AbortWithStatus(http.StatusInternalServerError)
+		return
+	}
+
+	if !isAdmin(cu) {
+		log.Errorf("must be admin")
+		c.AbortWithStatus(http.StatusInternalServerError)
+		return
+	}
 
 	uid, err := strconv.ParseInt(c.Param("uid"), 10, 64)
 	if err != nil {
@@ -289,15 +298,14 @@ func (client Client) As(c *gin.Context) {
 		return
 	}
 
-	u := New(uid)
-	err = client.DS.Get(c, u.Key, u)
+	u, err := client.Get(c, uid)
 	if err != nil {
 		log.Errorf(err.Error())
 		c.AbortWithStatus(http.StatusInternalServerError)
 		return
 	}
 
-	st := NewSessionToken(u, "", true)
+	st := NewSessionToken(u.ID(), "")
 	saveToSessionAndReturnTo(c, st, homePath)
 	return
 }
@@ -338,9 +346,50 @@ func getUInfo(c *gin.Context, path string) (Info, error) {
 }
 
 func (client Client) getOAuth(c *gin.Context, id string) (OAuth, error) {
-	u := NewOAuth(id)
-	err := client.DS.Get(c, u.Key, &u)
-	return u, err
+	return client.getOAuthByKey(c, NewOAuthKey(id))
+}
+
+func (client Client) getOAuthByKey(c *gin.Context, k *datastore.Key) (OAuth, error) {
+	log.Debugf(msgEnter)
+	defer log.Debugf(msgExit)
+
+	oauth, found := client.getCachedOAuth(k)
+	if found {
+		return oauth, nil
+	}
+
+	oauth = NewOAuth(k.Name)
+	err := client.ds.Get(c, k, &oauth)
+	if err != nil {
+		return oauth, err
+	}
+	client.cacheOAuth(oauth)
+	return oauth, nil
+}
+
+func (client Client) getCachedOAuth(k *datastore.Key) (OAuth, bool) {
+	oauth := NewOAuth(k.Name)
+	if k == nil {
+		return oauth, false
+	}
+
+	data, found := client.cache.Get(k.Encode())
+	if !found {
+		return oauth, false
+	}
+
+	oauth, ok := data.(OAuth)
+	if !ok {
+		return oauth, false
+	}
+	return oauth, true
+}
+
+func (client Client) cacheOAuth(oauth OAuth) {
+	if oauth.Key == nil {
+		return
+	}
+	client.cache.SetDefault(oauth.Key.Encode(), oauth)
 }
 
 func saveToSessionAndReturnTo(c *gin.Context, st *sessionToken, path string) {
@@ -369,42 +418,40 @@ func (client Client) getByEmail(c *gin.Context, email string) (*User, error) {
 		Filter("Email=", email).
 		KeysOnly()
 
-	ks, err := client.DS.GetAll(c, q, nil)
+	ks, err := client.ds.GetAll(c, q, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	for i := range ks {
 		if ks[i].ID != 0 {
-			return client.getByID(c, ks[i].ID)
+			return client.Get(c, ks[i].ID)
 		}
 	}
 	return nil, errors.New("unable to find user")
 }
 
-func (client Client) getByID(c *gin.Context, id int64) (*User, error) {
-	log.Debugf(msgEnter)
-	defer log.Debugf(msgExit)
-
-	u := New(id)
-	err := client.DS.Get(c, u.Key, u)
-	return u, err
-}
+// func (client Client) getByID(c *gin.Context, id int64) (*User, error) {
+// 	log.Debugf(msgEnter)
+// 	defer log.Debugf(msgExit)
+//
+// 	u := New(id)
+// 	err := client.DS.Get(c, u.Key, u)
+// 	return u, err
+// }
 
 type sessionToken struct {
-	Key *datastore.Key
+	ID  int64
 	Sub string
-	Data
 }
 
-func NewSessionToken(u *User, sub string, loaded bool) *sessionToken {
+func NewSessionToken(uid int64, sub string) *sessionToken {
 	log.Debugf(msgEnter)
 	defer log.Debugf(msgExit)
 
 	return &sessionToken{
-		Key:  u.Key,
-		Sub:  sub,
-		Data: u.Data,
+		ID:  uid,
+		Sub: sub,
 	}
 }
 
@@ -420,9 +467,45 @@ func SessionTokenFrom(s sessions.Session) (*sessionToken, bool) {
 	log.Debugf(msgEnter)
 	defer log.Debugf(msgExit)
 
-	log.Debugf("session %#v", s)
-	token := s.Get(sessionKey)
-	log.Debugf("token %#v", token)
-	token2, ok := s.Get(sessionKey).(*sessionToken)
-	return token2, ok
+	token, ok := s.Get(sessionKey).(*sessionToken)
+	return token, ok
+}
+
+func NewFrom(s sessions.Session) (*User, error) {
+	token, ok := SessionTokenFrom(s)
+	if !ok {
+		return nil, errors.New("token not found")
+	}
+
+	if token.ID != 0 {
+		return nil, errors.New("user present, no need for new one.")
+	}
+
+	var err error
+	u := New(token.ID)
+	u.Name, err = nameFrom(s)
+	if err != nil {
+		return nil, err
+	}
+	u.Email, err = emailFrom(s)
+	if err != nil {
+		return nil, err
+	}
+	return u, nil
+}
+
+func emailFrom(s sessions.Session) (string, error) {
+	email, ok := s.Get(emailKey).(string)
+	if !ok {
+		return "", errors.New("email not found")
+	}
+	return email, nil
+}
+
+func nameFrom(s sessions.Session) (string, error) {
+	name, ok := s.Get(nameKey).(string)
+	if !ok {
+		return "", errors.New("name not found")
+	}
+	return name, nil
 }
