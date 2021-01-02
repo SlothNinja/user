@@ -87,6 +87,10 @@ func (u *User) LoadKey(k *datastore.Key) error {
 	return nil
 }
 
+func (u *User) IsAdmin() bool {
+	return u != nil && u.Admin
+}
+
 const (
 	kind             = "User"
 	uidParam         = "uid"
