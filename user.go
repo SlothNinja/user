@@ -53,15 +53,11 @@ func EmailHash(email string) (string, error) {
 }
 
 type Client struct {
-	ds    *datastore.Client
-	cache *cache.Cache
+	*sn.Client
 }
 
-func NewClient(dsClient *datastore.Client, mcache *cache.Cache) Client {
-	return Client{
-		ds:    dsClient,
-		cache: mcache,
-	}
+func NewClient(dsClient *datastore.Client, logger *log.Logger, mcache *cache.Cache) *Client {
+	return &Client{sn.NewClient(dsClient, logger, mcache, nil)}
 }
 
 func (u *User) Load(ps []datastore.Property) error {
@@ -171,13 +167,13 @@ func GravatarURL(email, size, gravType string) string {
 }
 
 func (client Client) Update(c *gin.Context, cu, u1, u2 *User) error {
-	log.Debugf(msgEnter)
-	defer log.Debugf(msgExit)
+	client.Log.Debugf(msgEnter)
+	defer client.Log.Debugf(msgExit)
 
 	if isAdmin(cu) {
-		log.Debugf("is admin")
+		client.Log.Debugf("is admin")
 		if u2.Email != "" {
-			log.Debugf("updating email")
+			client.Log.Debugf("updating email")
 			u1.Email = u2.Email
 
 			hash, err := EmailHash(u1.Email)
@@ -194,8 +190,8 @@ func (client Client) Update(c *gin.Context, cu, u1, u2 *User) error {
 	}
 
 	if isAdmin(cu) || (cu.ID() == u1.ID()) {
-		log.Debugf("is admin or current")
-		log.Debugf("updating emailNotifications and gravType")
+		client.Log.Debugf("is admin or current")
+		client.Log.Debugf("updating emailNotifications and gravType")
 		u1.EmailReminders = u2.EmailReminders
 		u1.EmailNotifications = u2.EmailNotifications
 		u1.GravType = u2.GravType
@@ -238,7 +234,7 @@ func (client Client) NameIsUnique(c *gin.Context, name string) (bool, error) {
 
 	q := datastore.NewQuery("User").Filter("LCName=", LCName)
 
-	cnt, err := client.ds.Count(c, q)
+	cnt, err := client.DS.Count(c, q)
 	if err != nil {
 		return false, err
 	}
@@ -334,12 +330,12 @@ func PathFor(uid int64) template.HTML {
 // }
 
 func (client Client) Fetch(c *gin.Context) {
-	log.Debugf(msgEnter)
-	defer log.Debugf(msgExit)
+	client.Log.Debugf(msgEnter)
+	defer client.Log.Debugf(msgExit)
 
 	uid, err := getUID(c, uidParam)
 	if err != nil || uid == NotFound {
-		log.Errorf(err.Error())
+		client.Log.Errorf(err.Error())
 		c.Redirect(http.StatusSeeOther, "/")
 		c.Abort()
 		return
@@ -347,7 +343,7 @@ func (client Client) Fetch(c *gin.Context) {
 
 	u, err := client.Get(c, uid)
 	if err != nil {
-		log.Errorf("Unable to get user for id: %v", c.Param("uid"))
+		client.Log.Errorf("Unable to get user for id: %v", c.Param("uid"))
 		c.Redirect(http.StatusSeeOther, "/")
 		c.Abort()
 		return
@@ -356,13 +352,13 @@ func (client Client) Fetch(c *gin.Context) {
 }
 
 func (client Client) FetchAll(c *gin.Context) {
-	log.Debugf(msgEnter)
-	defer log.Debugf(msgExit)
+	client.Log.Debugf(msgEnter)
+	defer client.Log.Debugf(msgExit)
 
 	us, cnt, err := client.getFiltered(c, c.PostForm("start"), c.PostForm("length"))
 
 	if err != nil {
-		log.Errorf(err.Error())
+		client.Log.Errorf(err.Error())
 		c.Redirect(http.StatusSeeOther, homePath)
 		c.Abort()
 	}
@@ -370,11 +366,11 @@ func (client Client) FetchAll(c *gin.Context) {
 }
 
 func (client Client) getFiltered(c *gin.Context, start, length string) ([]*User, int64, error) {
-	log.Debugf(msgEnter)
-	defer log.Debugf(msgExit)
+	client.Log.Debugf(msgEnter)
+	defer client.Log.Debugf(msgExit)
 
 	q := AllQuery(c).KeysOnly()
-	icnt, err := client.ds.Count(c, q)
+	icnt, err := client.DS.Count(c, q)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -392,7 +388,7 @@ func (client Client) getFiltered(c *gin.Context, start, length string) ([]*User,
 		}
 	}
 
-	ks, err := client.ds.GetAll(c, q, nil)
+	ks, err := client.DS.GetAll(c, q, nil)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -405,7 +401,7 @@ func (client Client) getFiltered(c *gin.Context, start, length string) ([]*User,
 		}
 	}
 
-	err = client.ds.GetMulti(c, ks, us)
+	err = client.DS.GetMulti(c, ks, us)
 	return us, cnt, err
 }
 
@@ -437,8 +433,8 @@ func From(c *gin.Context) *User {
 var ErrMissingToken = fmt.Errorf("missing token")
 
 func (client Client) Current(c *gin.Context) (*User, error) {
-	log.Debugf(msgEnter)
-	defer log.Debugf(msgExit)
+	client.Log.Debugf(msgEnter)
+	defer client.Log.Debugf(msgExit)
 
 	session := sessions.Default(c)
 	token, ok := SessionTokenFrom(session)
@@ -488,8 +484,8 @@ func (u User) MarshalJSON() ([]byte, error) {
 }
 
 func (client Client) ByParam(c *gin.Context, param string) (*User, error) {
-	log.Debugf(msgEnter)
-	defer log.Debugf(msgExit)
+	client.Log.Debugf(msgEnter)
+	defer client.Log.Debugf(msgExit)
 
 	uid, err := getUID(c, param)
 	if err != nil {
@@ -500,15 +496,15 @@ func (client Client) ByParam(c *gin.Context, param string) (*User, error) {
 }
 
 func (client Client) Get(c *gin.Context, id int64) (*User, error) {
-	log.Debugf(msgEnter)
-	defer log.Debugf(msgExit)
+	client.Log.Debugf(msgEnter)
+	defer client.Log.Debugf(msgExit)
 
 	return client.getUserByKey(c, NewKey(id))
 }
 
 func (client Client) getUserByKey(c *gin.Context, k *datastore.Key) (*User, error) {
-	log.Debugf(msgEnter)
-	defer log.Debugf(msgExit)
+	client.Log.Debugf(msgEnter)
+	defer client.Log.Debugf(msgExit)
 
 	u, found := client.getCachedUser(k)
 	if found {
@@ -516,7 +512,7 @@ func (client Client) getUserByKey(c *gin.Context, k *datastore.Key) (*User, erro
 	}
 
 	u = New(k.ID)
-	err := client.ds.Get(c, k, u)
+	err := client.DS.Get(c, k, u)
 	if err != nil {
 		return nil, err
 	}
@@ -529,7 +525,7 @@ func (client Client) getCachedUser(k *datastore.Key) (*User, bool) {
 		return nil, false
 	}
 
-	data, found := client.cache.Get(k.Encode())
+	data, found := client.Cache.Get(k.Encode())
 	if !found {
 		return nil, false
 	}
@@ -545,12 +541,12 @@ func (client Client) cacheUser(u *User) {
 	if u.Key == nil {
 		return
 	}
-	client.cache.SetDefault(u.Key.Encode(), u)
+	client.Cache.SetDefault(u.Key.Encode(), u)
 }
 
 func (client Client) GetMulti(c *gin.Context, ids []int64) ([]*User, error) {
-	log.Debugf(msgEnter)
-	defer log.Debugf(msgExit)
+	client.Log.Debugf(msgEnter)
+	defer client.Log.Debugf(msgExit)
 
 	us := make([]*User, len(ids))
 	merr := make(datastore.MultiError, len(ids))
@@ -569,21 +565,21 @@ func (client Client) GetMulti(c *gin.Context, ids []int64) ([]*User, error) {
 }
 
 func (client Client) AllocateIDs(c *gin.Context, ks []*datastore.Key) ([]*datastore.Key, error) {
-	return client.ds.AllocateIDs(c, ks)
+	return client.DS.AllocateIDs(c, ks)
 }
 
 func (client Client) Put(c *gin.Context, k *datastore.Key, u *User) (*datastore.Key, error) {
-	log.Debugf(msgEnter)
-	defer log.Debugf(msgExit)
+	client.Log.Debugf(msgEnter)
+	defer client.Log.Debugf(msgExit)
 
 	return client.putUserByKey(c, k, u)
 }
 
 func (client Client) putUserByKey(c *gin.Context, k *datastore.Key, u *User) (*datastore.Key, error) {
-	log.Debugf(msgEnter)
-	defer log.Debugf(msgExit)
+	client.Log.Debugf(msgEnter)
+	defer client.Log.Debugf(msgExit)
 
-	k, err := client.ds.Put(c, k, u)
+	k, err := client.DS.Put(c, k, u)
 	if err != nil {
 		return nil, err
 	}
@@ -592,5 +588,5 @@ func (client Client) putUserByKey(c *gin.Context, k *datastore.Key, u *User) (*d
 }
 
 func (client Client) RunInTransaction(c *gin.Context, f func(*datastore.Transaction) error, opts ...datastore.TransactionOption) (*datastore.Commit, error) {
-	return client.ds.RunInTransaction(c, f, opts...)
+	return client.DS.RunInTransaction(c, f, opts...)
 }

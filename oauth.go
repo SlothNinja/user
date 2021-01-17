@@ -199,12 +199,12 @@ func NewOAuth(id string) OAuth {
 
 func (client Client) Auth(path string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		log.Debugf(msgEnter)
-		defer log.Debugf(msgExit)
+		client.Log.Debugf(msgEnter)
+		defer client.Log.Debugf(msgExit)
 
 		uInfo, err := getUInfo(c, path)
 		if err != nil {
-			log.Errorf(err.Error())
+			client.Log.Errorf(err.Error())
 			c.AbortWithStatus(http.StatusInternalServerError)
 			return
 		}
@@ -225,7 +225,7 @@ func (client Client) Auth(path string) gin.HandlerFunc {
 		if err == nil {
 			u, err := client.Get(c, oa.ID)
 			if err != nil {
-				log.Errorf(err.Error())
+				client.Log.Errorf(err.Error())
 				c.AbortWithStatus(http.StatusInternalServerError)
 				return
 			}
@@ -237,7 +237,7 @@ func (client Client) Auth(path string) gin.HandlerFunc {
 
 		// Datastore error other than missing entity.
 		if err != datastore.ErrNoSuchEntity {
-			log.Errorf("unable to get user for %#v", uInfo)
+			client.Log.Errorf("unable to get user for %#v", uInfo)
 			c.AbortWithStatus(http.StatusBadRequest)
 			return
 		}
@@ -247,18 +247,11 @@ func (client Client) Auth(path string) gin.HandlerFunc {
 		// If so, use old entities for user
 		u, err := client.getByEmail(c, uInfo.Email)
 		if err == nil {
-			client, err := datastore.NewClient(c, "")
-			if err != nil {
-				log.Errorf(err.Error())
-				c.AbortWithStatus(http.StatusBadRequest)
-				return
-			}
-
 			oa := NewOAuth(oaid)
 			oa.ID = u.ID()
-			_, err = client.Put(c, oa.Key, &oa)
+			_, err = client.DS.Put(c, oa.Key, &oa)
 			if err != nil {
-				log.Errorf(err.Error())
+				client.Log.Errorf(err.Error())
 				c.AbortWithStatus(http.StatusBadRequest)
 				return
 			}
@@ -284,32 +277,32 @@ func isAdmin(u *User) bool {
 }
 
 func (client Client) As(c *gin.Context) {
-	log.Debugf(msgEnter)
-	defer log.Debugf(msgExit)
+	client.Log.Debugf(msgEnter)
+	defer client.Log.Debugf(msgExit)
 
 	cu, err := client.Current(c)
 	if err != nil {
-		log.Errorf(err.Error())
+		client.Log.Errorf(err.Error())
 		c.AbortWithStatus(http.StatusInternalServerError)
 		return
 	}
 
 	if !isAdmin(cu) {
-		log.Errorf("must be admin")
+		client.Log.Errorf("must be admin")
 		c.AbortWithStatus(http.StatusInternalServerError)
 		return
 	}
 
 	uid, err := strconv.ParseInt(c.Param("uid"), 10, 64)
 	if err != nil {
-		log.Errorf(err.Error())
+		client.Log.Errorf(err.Error())
 		c.AbortWithStatus(http.StatusInternalServerError)
 		return
 	}
 
 	u, err := client.Get(c, uid)
 	if err != nil {
-		log.Errorf(err.Error())
+		client.Log.Errorf(err.Error())
 		c.AbortWithStatus(http.StatusInternalServerError)
 		return
 	}
@@ -359,8 +352,8 @@ func (client Client) getOAuth(c *gin.Context, id string) (OAuth, error) {
 }
 
 func (client Client) getOAuthByKey(c *gin.Context, k *datastore.Key) (OAuth, error) {
-	log.Debugf(msgEnter)
-	defer log.Debugf(msgExit)
+	client.Log.Debugf(msgEnter)
+	defer client.Log.Debugf(msgExit)
 
 	oauth, found := client.getCachedOAuth(k)
 	if found {
@@ -368,7 +361,7 @@ func (client Client) getOAuthByKey(c *gin.Context, k *datastore.Key) (OAuth, err
 	}
 
 	oauth = NewOAuth(k.Name)
-	err := client.ds.Get(c, k, &oauth)
+	err := client.DS.Get(c, k, &oauth)
 	if err != nil {
 		return oauth, err
 	}
@@ -382,7 +375,7 @@ func (client Client) getCachedOAuth(k *datastore.Key) (OAuth, bool) {
 		return oauth, false
 	}
 
-	data, found := client.cache.Get(k.Encode())
+	data, found := client.Cache.Get(k.Encode())
 	if !found {
 		return oauth, false
 	}
@@ -398,7 +391,7 @@ func (client Client) cacheOAuth(oauth OAuth) {
 	if oauth.Key == nil {
 		return
 	}
-	client.cache.SetDefault(oauth.Key.Encode(), oauth)
+	client.Cache.SetDefault(oauth.Key.Encode(), oauth)
 }
 
 func saveToSessionAndReturnTo(c *gin.Context, st *sessionToken, path string) {
@@ -418,8 +411,8 @@ func saveToSessionAndReturnTo(c *gin.Context, st *sessionToken, path string) {
 }
 
 func (client Client) getByEmail(c *gin.Context, email string) (*User, error) {
-	log.Debugf(msgEnter)
-	defer log.Debugf(msgExit)
+	client.Log.Debugf(msgEnter)
+	defer client.Log.Debugf(msgExit)
 
 	email = strings.ToLower(strings.TrimSpace(email))
 	q := datastore.NewQuery(uKind).
@@ -427,7 +420,7 @@ func (client Client) getByEmail(c *gin.Context, email string) (*User, error) {
 		Filter("Email=", email).
 		KeysOnly()
 
-	ks, err := client.ds.GetAll(c, q, nil)
+	ks, err := client.DS.GetAll(c, q, nil)
 	if err != nil {
 		return nil, err
 	}
