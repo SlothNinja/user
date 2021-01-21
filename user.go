@@ -1,6 +1,7 @@
 package user
 
 import (
+	"context"
 	"crypto/md5"
 	"crypto/sha1"
 	"encoding/json"
@@ -8,6 +9,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -19,6 +21,8 @@ import (
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 	"github.com/patrickmn/go-cache"
+	"google.golang.org/api/option"
+	"google.golang.org/grpc"
 )
 
 type User struct {
@@ -56,7 +60,34 @@ type Client struct {
 	*sn.Client
 }
 
-func NewClient(dsClient *datastore.Client, logger *log.Logger, mcache *cache.Cache) *Client {
+func NewClient(logger *log.Logger, mcache *cache.Cache) *Client {
+	logger.Debugf(msgEnter)
+	defer logger.Debugf(msgExit)
+
+	if sn.IsProduction() {
+		log.Debugf("production")
+		dsClient, err := datastore.NewClient(
+			context.Background(),
+			os.Getenv(USER_PROJECT_ID),
+		)
+		if err != nil {
+			logger.Panicf("unable to connect to user database: %w", err)
+		}
+		return &Client{sn.NewClient(dsClient, logger, mcache, nil)}
+
+	}
+	log.Debugf("development")
+	dsClient, err := datastore.NewClient(
+		context.Background(),
+		os.Getenv(USER_PROJECT_ID),
+		option.WithEndpoint(os.Getenv(DS_USER_HOST)),
+		option.WithoutAuthentication(),
+		option.WithGRPCDialOption(grpc.WithInsecure()),
+		option.WithGRPCConnectionPool(50),
+	)
+	if err != nil {
+		logger.Panicf("unable to connect to user database: %w", err)
+	}
 	return &Client{sn.NewClient(dsClient, logger, mcache, nil)}
 }
 
@@ -88,18 +119,20 @@ func (u *User) IsAdmin() bool {
 }
 
 const (
-	kind             = "User"
-	uidParam         = "uid"
-	guserKey         = "guser"
-	currentKey       = "current"
-	userKey          = "User"
-	countKey         = "count"
-	homePath         = "/"
-	salt             = "slothninja"
-	usersKey         = "Users"
-	msgEnter         = "Entering"
-	msgExit          = "Exiting"
-	NotFound   int64 = -1
+	kind                  = "User"
+	uidParam              = "uid"
+	guserKey              = "guser"
+	currentKey            = "current"
+	userKey               = "User"
+	countKey              = "count"
+	homePath              = "/"
+	salt                  = "slothninja"
+	usersKey              = "Users"
+	msgEnter              = "Entering"
+	msgExit               = "Exiting"
+	NotFound        int64 = -1
+	USER_PROJECT_ID       = "USER_PROJECT_ID"
+	DS_USER_HOST          = "DS_USER_HOST"
 )
 
 type Users []*User

@@ -12,5 +12,10 @@ require (
 	github.com/gorilla/securecookie v1.1.1
 	github.com/gorilla/sessions v1.2.1 // indirect
 	github.com/patrickmn/go-cache v2.1.0+incompatible
+	golang.org/x/net v0.0.0-20210119194325-5f4716e94777 // indirect
 	golang.org/x/oauth2 v0.0.0-20210113205817-d3ed898aa8a3
+	golang.org/x/tools v0.1.0 // indirect
+	google.golang.org/api v0.36.0
+	google.golang.org/genproto v0.0.0-20210121164019-fc48d45331c7 // indirect
+	google.golang.org/grpc v1.35.0
 )
