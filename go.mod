@@ -4,7 +4,7 @@ go 1.14
 
 require (
 	cloud.google.com/go/datastore v1.4.0
-	github.com/SlothNinja/log v1.0.1
+	github.com/SlothNinja/log v1.0.2
 	github.com/SlothNinja/sn v1.0.2
 	github.com/gin-contrib/sessions v0.0.3
 	github.com/gin-gonic/gin v1.6.3
