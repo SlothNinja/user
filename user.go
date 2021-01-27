@@ -25,6 +25,8 @@ import (
 	"google.golang.org/grpc"
 )
 
+var ErrMissingKey = errors.New("missing key")
+
 type User struct {
 	Key *datastore.Key `datastore:"__key__"`
 	Data
@@ -60,7 +62,7 @@ type Client struct {
 	*sn.Client
 }
 
-func NewClient(logger *log.Logger, mcache *cache.Cache) *Client {
+func NewClient(logger *log.Logger, cache *cache.Cache) *Client {
 	logger.Debugf(msgEnter)
 	defer logger.Debugf(msgExit)
 
@@ -73,7 +75,9 @@ func NewClient(logger *log.Logger, mcache *cache.Cache) *Client {
 		if err != nil {
 			logger.Panicf("unable to connect to user database: %w", err)
 		}
-		return &Client{sn.NewClient(dsClient, logger, mcache, nil)}
+		return &Client{
+			Client: sn.NewClient(dsClient, logger, cache, nil),
+		}
 
 	}
 	log.Debugf("development")
@@ -88,7 +92,9 @@ func NewClient(logger *log.Logger, mcache *cache.Cache) *Client {
 	if err != nil {
 		logger.Panicf("unable to connect to user database: %w", err)
 	}
-	return &Client{sn.NewClient(dsClient, logger, mcache, nil)}
+	return &Client{
+		Client: sn.NewClient(dsClient, logger, cache, nil),
+	}
 }
 
 func (u *User) Load(ps []datastore.Property) error {
@@ -199,7 +205,7 @@ func GravatarURL(email, size, gravType string) string {
 	return fmt.Sprintf("https://www.gravatar.com/avatar/%s?s=%s&d=%s&f=y", md5string, size, gravType)
 }
 
-func (client Client) Update(c *gin.Context, cu, u1, u2 *User) error {
+func (client *Client) Update(c *gin.Context, cu, u1, u2 *User) error {
 	client.Log.Debugf(msgEnter)
 	defer client.Log.Debugf(msgExit)
 
@@ -238,7 +244,7 @@ func (client Client) Update(c *gin.Context, cu, u1, u2 *User) error {
 	return nil
 }
 
-func (client Client) updateName(c *gin.Context, u *User, n string) error {
+func (client *Client) updateName(c *gin.Context, u *User, n string) error {
 	matcher := regexp.MustCompile(`^[A-Za-z][A-Za-z0-9._%+\-]+$`)
 
 	switch {
@@ -262,7 +268,7 @@ func (client Client) updateName(c *gin.Context, u *User, n string) error {
 	}
 }
 
-func (client Client) NameIsUnique(c *gin.Context, name string) (bool, error) {
+func (client *Client) NameIsUnique(c *gin.Context, name string) (bool, error) {
 	LCName := strings.ToLower(name)
 
 	q := datastore.NewQuery("User").Filter("LCName=", LCName)
@@ -362,7 +368,7 @@ func PathFor(uid int64) template.HTML {
 // 	}
 // }
 
-func (client Client) Fetch(c *gin.Context) {
+func (client *Client) Fetch(c *gin.Context) {
 	client.Log.Debugf(msgEnter)
 	defer client.Log.Debugf(msgExit)
 
@@ -384,7 +390,7 @@ func (client Client) Fetch(c *gin.Context) {
 	WithUser(c, u)
 }
 
-func (client Client) FetchAll(c *gin.Context) {
+func (client *Client) FetchAll(c *gin.Context) {
 	client.Log.Debugf(msgEnter)
 	defer client.Log.Debugf(msgExit)
 
@@ -398,7 +404,7 @@ func (client Client) FetchAll(c *gin.Context) {
 	withUsers(withCount(c, cnt), us)
 }
 
-func (client Client) getFiltered(c *gin.Context, start, length string) ([]*User, int64, error) {
+func (client *Client) getFiltered(c *gin.Context, start, length string) ([]*User, int64, error) {
 	client.Log.Debugf(msgEnter)
 	defer client.Log.Debugf(msgExit)
 
@@ -465,7 +471,7 @@ func From(c *gin.Context) *User {
 
 var ErrMissingToken = fmt.Errorf("missing token")
 
-func (client Client) Current(c *gin.Context) (*User, error) {
+func (client *Client) Current(c *gin.Context) (*User, error) {
 	client.Log.Debugf(msgEnter)
 	defer client.Log.Debugf(msgExit)
 
@@ -516,35 +522,91 @@ func (u User) MarshalJSON() ([]byte, error) {
 	})
 }
 
-func (client Client) ByParam(c *gin.Context, param string) (*User, error) {
+// func (client *Client) ByParam(c *gin.Context, param string) (*User, error) {
+// 	client.Log.Debugf(msgEnter)
+// 	defer client.Log.Debugf(msgExit)
+//
+// 	uid, err := getUID(c, param)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+//
+// 	return client.Get(c, uid)
+// }
+
+func (client *Client) Get(c *gin.Context, id int64) (*User, error) {
 	client.Log.Debugf(msgEnter)
 	defer client.Log.Debugf(msgExit)
 
-	uid, err := getUID(c, param)
-	if err != nil {
-		return nil, err
-	}
-
-	return client.Get(c, uid)
+	return client.get(c, NewKey(id))
 }
 
-func (client Client) Get(c *gin.Context, id int64) (*User, error) {
+func (client *Client) get(c *gin.Context, k *datastore.Key) (*User, error) {
 	client.Log.Debugf(msgEnter)
 	defer client.Log.Debugf(msgExit)
 
-	return client.getUserByKey(c, NewKey(id))
-}
-
-func (client Client) getUserByKey(c *gin.Context, k *datastore.Key) (*User, error) {
-	client.Log.Debugf(msgEnter)
-	defer client.Log.Debugf(msgExit)
-
-	u, found := client.getCachedUser(k)
-	if found {
+	u, err := client.mcGet(k)
+	if err == nil {
 		return u, nil
 	}
 
-	u = New(k.ID)
+	return client.dsGet(c, k)
+}
+
+func (client *Client) mcGet(k *datastore.Key) (*User, error) {
+	client.Log.Debugf(msgEnter)
+	defer client.Log.Debugf(msgExit)
+
+	if k == nil {
+		return nil, ErrMissingKey
+	}
+
+	item, found := client.Cache.Get(k.Encode())
+	if !found {
+		return nil, ErrNotFound
+	}
+
+	u, ok := item.(*User)
+	if !ok {
+		return nil, ErrInvalidCache
+	}
+	return u, nil
+}
+
+func (client *Client) mcGetMulti(ks []*datastore.Key) ([]*User, error) {
+	client.Log.Debugf(msgEnter)
+	defer client.Log.Debugf(msgExit)
+
+	l := len(ks)
+	if l == 0 {
+		return nil, ErrMissingKey
+	}
+
+	me := make(datastore.MultiError, l)
+	us := make([]*User, l)
+	isNil := true
+	for i, k := range ks {
+		us[i], me[i] = client.mcGet(k)
+		if me[i] != nil {
+			isNil = false
+		}
+	}
+
+	if isNil {
+		return us, nil
+	}
+	return us, me
+}
+
+func (client *Client) dsGet(c *gin.Context, k *datastore.Key) (*User, error) {
+	client.Log.Debugf(msgEnter)
+	defer client.Log.Debugf(msgExit)
+
+	if k == nil {
+		return nil, ErrMissingKey
+	}
+
+	u := new(User)
 	err := client.DS.Get(c, k, u)
 	if err != nil {
 		return nil, err
@@ -553,62 +615,62 @@ func (client Client) getUserByKey(c *gin.Context, k *datastore.Key) (*User, erro
 	return u, nil
 }
 
-func (client Client) getCachedUser(k *datastore.Key) (*User, bool) {
-	if k == nil {
-		return nil, false
+func (client *Client) dsGetMulti(c *gin.Context, ks []*datastore.Key) ([]*User, error) {
+	client.Log.Debugf(msgEnter)
+	defer client.Log.Debugf(msgExit)
+
+	l := len(ks)
+	if l == 0 {
+		return nil, ErrMissingKey
 	}
 
-	data, found := client.Cache.Get(k.Encode())
-	if !found {
-		return nil, false
+	us := make([]*User, l)
+	err := client.DS.GetMulti(c, ks, us)
+	if err != nil {
+		return us, err
 	}
-
-	u, ok := data.(*User)
-	if !ok {
-		return nil, false
+	for _, u := range us {
+		client.cacheUser(u)
 	}
-	return u, true
+	return us, nil
 }
 
-func (client Client) cacheUser(u *User) {
+func (client *Client) cacheUser(u *User) {
 	if u.Key == nil {
 		return
 	}
 	client.Cache.SetDefault(u.Key.Encode(), u)
 }
 
-func (client Client) GetMulti(c *gin.Context, ids []int64) ([]*User, error) {
+func (client *Client) GetMulti(c *gin.Context, ids []int64) ([]*User, error) {
 	client.Log.Debugf(msgEnter)
 	defer client.Log.Debugf(msgExit)
 
-	us := make([]*User, len(ids))
-	merr := make(datastore.MultiError, len(ids))
-	isNil := true
+	ks := make([]*datastore.Key, len(ids))
+	for i, id := range ids {
+		ks[i] = NewKey(id)
+	}
 
-	for i := range ids {
-		us[i], merr[i] = client.getUserByKey(c, NewKey(ids[i]))
-		if merr[i] != nil {
-			isNil = false
-		}
+	us, me := client.mcGetMulti(ks)
+	if me == nil {
+		return us, nil
 	}
-	if !isNil {
-		return us, merr
-	}
-	return us, nil
+
+	return client.dsGetMulti(c, ks)
 }
 
-func (client Client) AllocateIDs(c *gin.Context, ks []*datastore.Key) ([]*datastore.Key, error) {
+func (client *Client) AllocateIDs(c *gin.Context, ks []*datastore.Key) ([]*datastore.Key, error) {
 	return client.DS.AllocateIDs(c, ks)
 }
 
-func (client Client) Put(c *gin.Context, k *datastore.Key, u *User) (*datastore.Key, error) {
+func (client *Client) Put(c *gin.Context, k *datastore.Key, u *User) (*datastore.Key, error) {
 	client.Log.Debugf(msgEnter)
 	defer client.Log.Debugf(msgExit)
 
 	return client.putUserByKey(c, k, u)
 }
 
-func (client Client) putUserByKey(c *gin.Context, k *datastore.Key, u *User) (*datastore.Key, error) {
+func (client *Client) putUserByKey(c *gin.Context, k *datastore.Key, u *User) (*datastore.Key, error) {
 	client.Log.Debugf(msgEnter)
 	defer client.Log.Debugf(msgExit)
 
@@ -620,6 +682,6 @@ func (client Client) putUserByKey(c *gin.Context, k *datastore.Key, u *User) (*d
 	return k, nil
 }
 
-func (client Client) RunInTransaction(c *gin.Context, f func(*datastore.Transaction) error, opts ...datastore.TransactionOption) (*datastore.Commit, error) {
+func (client *Client) RunInTransaction(c *gin.Context, f func(*datastore.Transaction) error, opts ...datastore.TransactionOption) (*datastore.Commit, error) {
 	return client.DS.RunInTransaction(c, f, opts...)
 }
