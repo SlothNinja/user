@@ -22,18 +22,6 @@ var (
 	ErrInvalidCache = errors.New("invalid cache value")
 )
 
-// type Client struct {
-// 	*sn.Client
-// 	User *user.Client
-// }
-//
-// func NewClient(dsClient *datastore.Client, userClient *user.Client, logger *log.Logger, mcache *cache.Cache) *Client {
-// 	return &Client{
-// 		Client: sn.NewClient(dsClient, logger, mcache, nil),
-// 		User:   userClient,
-// 	}
-// }
-//
 func StatsFrom(c *gin.Context) (s *Stats) {
 	s, _ = c.Value(statsKey).(*Stats)
 	return
@@ -44,9 +32,7 @@ func StatsWith(c *gin.Context, s *Stats) {
 }
 
 type Stats struct {
-	Key *datastore.Key `datastore:"__key__"`
-	// ID        string         `gae:"$id"`
-	// Parent    *datastore.Key `gae:"$parent"`
+	Key       *datastore.Key `datastore:"__key__"`
 	Turns     int
 	Duration  time.Duration
 	Longest   time.Duration
@@ -134,10 +120,6 @@ func (s *Stats) SinceLastString() string {
 		return fmt.Sprintf("%.1f days", d.Hours()/24)
 	}
 }
-
-//func key(c *gin.Context, u *user.User) *datastore.Key {
-//	return datastore.NewKey(ctx, kind, name, 0, u.Key)
-//}
 
 func NewStatsFor(u *User) *Stats {
 	return &Stats{Key: statsKeyFor(u)}
@@ -227,43 +209,6 @@ func (client *Client) dsGetStatsFor(c *gin.Context, u *User) (*Stats, error) {
 	client.Cache.SetDefault(s.Key.Encode(), s)
 	return s, nil
 }
-
-// func (client *Client) StatsForMulti(c *gin.Context, us []*User) ([]*Stats, error) {
-// 	l := len(us)
-// 	ss := make([]*Stats, l)
-// 	ks := make([]*datastore.Key, l)
-// 	for i := range ss {
-// 		ss[i] = NewStats(c, us[i])
-// 		ks[i] = ss[i].Key
-// 	}
-//
-// 	err := client.DS.GetMulti(c, ks, ss)
-// 	if err == nil {
-// 		return ss, nil
-// 	}
-//
-// 	me, ok := err.(datastore.MultiError)
-// 	if !ok {
-// 		return nil, err
-// 	}
-//
-// 	// filter out ErrNoSuchEntity since the entity will not exist if the player has yet to take a turn.
-// 	isNil := true
-// 	for i, e := range me {
-// 		if e != nil {
-// 			if e == datastore.ErrNoSuchEntity {
-// 				me[i] = nil
-// 			} else {
-// 				isNil = false
-// 			}
-// 		}
-// 	}
-//
-// 	if isNil {
-// 		return ss, nil
-// 	}
-// 	return nil, me
-// }
 
 func (client *Client) StatsFetch(c *gin.Context) {
 	client.Log.Debugf("Entering")

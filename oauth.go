@@ -433,15 +433,6 @@ func (client Client) getByEmail(c *gin.Context, email string) (*User, error) {
 	return nil, errors.New("unable to find user")
 }
 
-// func (client Client) getByID(c *gin.Context, id int64) (*User, error) {
-// 	log.Debugf(msgEnter)
-// 	defer log.Debugf(msgExit)
-//
-// 	u := New(id)
-// 	err := client.DS.Get(c, u.Key, u)
-// 	return u, err
-// }
-
 type sessionToken struct {
 	ID  int64
 	Sub string

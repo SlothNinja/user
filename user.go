@@ -1,7 +1,6 @@
 package user
 
 import (
-	"context"
 	"crypto/md5"
 	"crypto/sha1"
 	"encoding/json"
@@ -9,20 +8,15 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
-	"os"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
 	"cloud.google.com/go/datastore"
-	"github.com/SlothNinja/log"
 	"github.com/SlothNinja/sn"
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
-	"github.com/patrickmn/go-cache"
-	"google.golang.org/api/option"
-	"google.golang.org/grpc"
 )
 
 var ErrMissingKey = errors.New("missing key")
@@ -62,39 +56,8 @@ type Client struct {
 	*sn.Client
 }
 
-func NewClient(logger *log.Logger, cache *cache.Cache) *Client {
-	logger.Debugf(msgEnter)
-	defer logger.Debugf(msgExit)
-
-	if sn.IsProduction() {
-		log.Debugf("production")
-		dsClient, err := datastore.NewClient(
-			context.Background(),
-			os.Getenv(USER_PROJECT_ID),
-		)
-		if err != nil {
-			logger.Panicf("unable to connect to user database: %w", err)
-		}
-		return &Client{
-			Client: sn.NewClient(dsClient, logger, cache, nil),
-		}
-
-	}
-	log.Debugf("development")
-	dsClient, err := datastore.NewClient(
-		context.Background(),
-		os.Getenv(USER_PROJECT_ID),
-		option.WithEndpoint(os.Getenv(DS_USER_HOST)),
-		option.WithoutAuthentication(),
-		option.WithGRPCDialOption(grpc.WithInsecure()),
-		option.WithGRPCConnectionPool(50),
-	)
-	if err != nil {
-		logger.Panicf("unable to connect to user database: %w", err)
-	}
-	return &Client{
-		Client: sn.NewClient(dsClient, logger, cache, nil),
-	}
+func NewClient(snClient *sn.Client) *Client {
+	return &Client{snClient}
 }
 
 func (u *User) Load(ps []datastore.Property) error {
@@ -299,75 +262,6 @@ func PathFor(uid int64) template.HTML {
 	return template.HTML(fmt.Sprintf("%s/#/show/%d", getLoginHost(), uid))
 }
 
-// func GetCUserHandler(client *datastore.Client) gin.HandlerFunc {
-// 	return func(c *gin.Context) {
-// 		log.Debugf(msgEnter)
-// 		defer log.Debugf(msgExit)
-//
-// 		session := sessions.Default(c)
-// 		token, ok := SessionTokenFrom(session)
-// 		if !ok {
-// 			log.Warningf("missing token")
-// 			return
-// 		}
-//
-// 		u := New(token.Key.ID)
-// 		u.Data = token.Data
-// 		WithCurrent(c, u)
-// 	}
-// }
-
-// func GetCUserHandler(client *datastore.Client) gin.HandlerFunc {
-// 	return func(c *gin.Context) {
-// 		log.Debugf("Entering")
-// 		defer log.Debugf("Exiting")
-//
-// 		session := sessions.Default(c)
-// 		token, ok := SessionTokenFrom(session)
-// 		if !ok {
-// 			log.Warningf("missing token")
-// 			return
-// 		}
-//
-// 		if token.Loaded {
-// 			u := New(c, token.ID())
-// 			u.Data = token.User.Data
-// 			WithCurrent(c, u)
-// 			return
-// 		}
-//
-// 		u := New(c, token.ID())
-// 		err := client.Get(c, u.Key, u)
-// 		if err != nil {
-// 			log.Warningf(err.Error())
-// 			return
-// 		}
-// 		WithCurrent(c, u)
-// 	}
-// }
-
-// func RequireCurrentUser() gin.HandlerFunc {
-// 	return func(c *gin.Context) {
-// 		_, err := CurrentFrom(c)
-// 		if err != nil {
-// 			log.Warningf("RequireCurrentUser failed.")
-// 			c.Redirect(http.StatusSeeOther, "/")
-// 			c.Abort()
-// 		}
-// 	}
-// }
-//
-// func RequireAdmin(c *gin.Context) {
-// 	log.Debugf(msgEnter)
-// 	defer log.Debugf(msgExit)
-//
-// 	if !IsAdmin(c) {
-// 		log.Warningf("user not admin.")
-// 		c.Redirect(http.StatusSeeOther, "/")
-// 		c.Abort()
-// 	}
-// }
-
 func (client *Client) Fetch(c *gin.Context) {
 	client.Log.Debugf(msgEnter)
 	defer client.Log.Debugf(msgExit)
@@ -521,18 +415,6 @@ func (u User) MarshalJSON() ([]byte, error) {
 		ID:  u.ID(),
 	})
 }
-
-// func (client *Client) ByParam(c *gin.Context, param string) (*User, error) {
-// 	client.Log.Debugf(msgEnter)
-// 	defer client.Log.Debugf(msgExit)
-//
-// 	uid, err := getUID(c, param)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-//
-// 	return client.Get(c, uid)
-// }
 
 func (client *Client) Get(c *gin.Context, id int64) (*User, error) {
 	client.Log.Debugf(msgEnter)
