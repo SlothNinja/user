@@ -28,20 +28,20 @@ func init() {
 }
 
 const (
-	HOST        = "HOST"
-	LOGIN_HOST  = "LOGIN_HOST"
-	authPath    = "/auth"
-	sessionKey  = "session"
-	userNewPath = "#/new"
-	tokenLength = 32
-	uKind       = "User"
-	oauthsKind  = "OAuths"
-	oauthKind   = "OAuth"
-	root        = "root"
-	stateKey    = "state"
-	emailKey    = "email"
-	nameKey     = "name"
-	redirectKey = "redirect"
+	HOST           = "HOST"
+	UserHostURLEnv = "USER_HOST_URL"
+	authPath       = "/auth"
+	sessionKey     = "session"
+	userNewPath    = "#/new"
+	tokenLength    = 32
+	uKind          = "User"
+	oauthsKind     = "OAuths"
+	oauthKind      = "OAuth"
+	root           = "root"
+	stateKey       = "state"
+	emailKey       = "email"
+	nameKey        = "name"
+	redirectKey    = "redirect"
 )
 
 func getRedirectionPath(c *gin.Context) (string, bool) {
@@ -130,8 +130,8 @@ func getHost() string {
 	return os.Getenv(HOST)
 }
 
-func getLoginHost() string {
-	s := os.Getenv(LOGIN_HOST)
+func getUserHostURL() string {
+	s := os.Getenv(UserHostURLEnv)
 	if s != "" {
 		return s
 	}

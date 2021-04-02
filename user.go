@@ -259,7 +259,7 @@ func LinkFor(uid int64, name string) template.HTML {
 }
 
 func PathFor(uid int64) template.HTML {
-	return template.HTML(fmt.Sprintf("%s/#/show/%d", getLoginHost(), uid))
+	return template.HTML(fmt.Sprintf("%s/#/show/%d", getUserHostURL(), uid))
 }
 
 func (client *Client) Fetch(c *gin.Context) {

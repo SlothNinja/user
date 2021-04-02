@@ -43,6 +43,8 @@ cloud.google.com/go/datastore v1.5.0 h1:3En8Rj64Q5GxtjsTljiqm25LTzvPFbpK+WQrgeKO
 cloud.google.com/go/datastore v1.5.0/go.mod h1:RGUNM0FFAVkYA94BLTxoXBgfIyY1Riq67TwaBXH0lwc=
 cloud.google.com/go/logging v1.1.2 h1:KNALX0NZn8UJhqKnqoHxhMqyoZfBZoh5wF7CQJZ5XrU=
 cloud.google.com/go/logging v1.1.2/go.mod h1:KrljuAHIw631j9+QXsnq9vDwsrwmdxfGpivMR68M7DY=
+cloud.google.com/go/logging v1.3.0 h1:Ncg2sBr+SUtdqSmwRJ5WwuFG8Um3p/aZmRp6EtD9kPw=
+cloud.google.com/go/logging v1.3.0/go.mod h1:pA7Kcvk7H0jQMY5WV03GwzOt07Yjw9xVsQMQC5NUZQQ=
 cloud.google.com/go/pubsub v1.0.1/go.mod h1:R0Gpsv3s54REJCy4fxDixWD93lHJMoZTyQ2kNxGRt3I=
 cloud.google.com/go/pubsub v1.1.0/go.mod h1:EwwdRX2sKPjnvnqCa270oGRyludottCI76h+R3AArQw=
 cloud.google.com/go/pubsub v1.2.0 h1:Lpy6hKgdcl7a3WGSfJIFmxmcdjSpP6OmBEfcOv1Y680=
@@ -68,6 +70,8 @@ github.com/SlothNinja/inflect v1.0.0 h1:OURYwqV6Cx93vtTscpWtMfh1N6s8CHs1wrNQmvrp
 github.com/SlothNinja/inflect v1.0.0/go.mod h1:UcsxNaFuwOBkpXXuEnPf+B2q7mIXCzy9uOE1Klp0dtw=
 github.com/SlothNinja/log v1.0.3 h1:REgKPkA+JbFUcG+dkiBmIc2EaXSMAqB4xapL+zOJytg=
 github.com/SlothNinja/log v1.0.3/go.mod h1:ERX7qO0ujhvJVnncp2i1b1FOLptERQV1a/k/oZcKYMk=
+github.com/SlothNinja/log v1.0.5 h1:aFPXfXsVv/oujmOzXGRIe9vSJJQMegIiMwXddR2WtKU=
+github.com/SlothNinja/log v1.0.5/go.mod h1:HGZDOGLuRTKLXIEq+EW5AbdJ+LHNCShGztGZLtlCGlY=
 github.com/SlothNinja/restful v1.0.0 h1:Qcozj0/B5wLSAOec2qqphCXmAiBW3yr3LzEcYEaJBFA=
 github.com/SlothNinja/restful v1.0.0/go.mod h1:0Pm+cPyoDezRedyM2X9rmP9l/sg1rgYKTaKnw1wRj9A=
 github.com/SlothNinja/sn v1.0.5 h1:nO9MN/pDxN3MpEZ/+GHOo3zvNsV9tc7lw3MOHeUEi+s=
@@ -444,6 +448,7 @@ golang.org/x/sys v0.0.0-20210113181707-4bcb84eeeb78/go.mod h1:h1NjWce9XRLGQEsW7w
 golang.org/x/sys v0.0.0-20210119212857-b64e53b001e4 h1:myAQVi0cGEoqQVR5POX+8RR2mrocKqNN1hmeMqhX27k=
 golang.org/x/sys v0.0.0-20210119212857-b64e53b001e4/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
 golang.org/x/sys v0.0.0-20210220050731-9a76102bfb43/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
+golang.org/x/sys v0.0.0-20210223095934-7937bea0104d/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
 golang.org/x/sys v0.0.0-20210225134936-a50acf3fe073/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
 golang.org/x/sys v0.0.0-20210305230114-8fe3ee5dd75b/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
 golang.org/x/sys v0.0.0-20210320140829-1e4c9ba3b0c4 h1:EZ2mChiOa8udjfp6rRmswTbtZN/QzUQp4ptM4rnjHvc=
