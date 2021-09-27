@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"cloud.google.com/go/datastore"
-	"github.com/SlothNinja/sn"
+	"github.com/SlothNinja/client"
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 )
@@ -53,10 +53,10 @@ func EmailHash(email string) (string, error) {
 }
 
 type Client struct {
-	*sn.Client
+	*client.Client
 }
 
-func NewClient(snClient *sn.Client) *Client {
+func NewClient(snClient *client.Client) *Client {
 	return &Client{snClient}
 }
 
@@ -149,9 +149,9 @@ func AllQuery(c *gin.Context) *datastore.Query {
 	return datastore.NewQuery(kind).Ancestor(RootKey())
 }
 
-func MCKey(c *gin.Context, gid string) string {
-	return sn.VersionID() + gid
-}
+// func MCKey(c *gin.Context, gid string) string {
+// 	return sn.VersionID() + gid
+// }
 
 func (u *User) Gravatar(size string) template.URL {
 	return template.URL(GravatarURL(u.Email, size, u.GravType))
