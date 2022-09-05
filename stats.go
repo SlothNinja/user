@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"cloud.google.com/go/datastore"
-	"github.com/SlothNinja/restful"
 	"github.com/gin-gonic/gin"
 )
 
@@ -224,14 +223,12 @@ func (client *Client) StatsFetch(c *gin.Context) {
 	}
 	client.Log.Debugf("u: %#v", cu)
 	if cu == nil {
-		restful.AddErrorf(c, "missing user.")
 		c.AbortWithError(http.StatusInternalServerError, fmt.Errorf("missing user."))
 		return
 	}
 
 	s, err := client.StatsFor(c, cu)
 	if err != nil {
-		restful.AddErrorf(c, err.Error())
 		c.AbortWithError(http.StatusInternalServerError, err)
 		return
 	}

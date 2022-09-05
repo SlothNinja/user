@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"cloud.google.com/go/datastore"
-	"github.com/SlothNinja/sn/v2"
+	"github.com/SlothNinja/client"
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 )
@@ -53,10 +53,10 @@ func EmailHash(email string) (string, error) {
 }
 
 type Client struct {
-	*sn.Client
+	*client.Client
 }
 
-func NewClient(snClient *sn.Client) *Client {
+func NewClient(snClient *client.Client) *Client {
 	return &Client{snClient}
 }
 
